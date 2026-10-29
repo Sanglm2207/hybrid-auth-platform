@@ -1,0 +1,93 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "local: env",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "-c",
+        "if [[ ! -f .env ]]; then (umask 077; cp .env.example .env); fi"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "local: keys",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "-c",
+        "if [[ -f keys/private.pem && -f keys/public.pem ]]; then echo 'Using existing JWT keys'; else bash ./generate-keys.sh; fi"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "local: databases up",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "redis"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "local: prepare",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "local: env",
+        "local: keys",
+        "local: databases up"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "local: databases stop",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "stop",
+        "postgres",
+        "redis"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "maven: verify",
+      "type": "process",
+      "command": "mvn",
+      "args": [
+        "-B",
+        "-ntp",
+        "verify"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$javac"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

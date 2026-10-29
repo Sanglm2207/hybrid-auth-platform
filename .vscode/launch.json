@@ -1,0 +1,68 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Auth Service",
+      "request": "launch",
+      "mainClass": "dev.kaidev.auth.AuthApplication",
+      "projectName": "auth-service",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "DB_URL": "jdbc:postgresql://127.0.0.1:5432/authdb",
+        "DB_USERNAME": "auth",
+        "REDIS_HOST": "127.0.0.1",
+        "REDIS_PORT": "6379",
+        "JWT_ISSUER": "http://localhost:8701",
+        "JWT_PRIVATE_KEY": "${workspaceFolder}/keys/private.pem",
+        "JWT_PUBLIC_KEY": "${workspaceFolder}/keys/public.pem"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "vmArgs": "--enable-native-access=ALL-UNNAMED"
+    },
+    {
+      "type": "java",
+      "name": "User Service",
+      "request": "launch",
+      "mainClass": "dev.kaidev.user.UserApplication",
+      "projectName": "user-service",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "JWT_ISSUER": "http://localhost:8701",
+        "JWKS_URI": "http://localhost:8701/.well-known/jwks.json"
+      },
+      "vmArgs": "--enable-native-access=ALL-UNNAMED"
+    },
+    {
+      "type": "java",
+      "name": "Gateway",
+      "request": "launch",
+      "mainClass": "dev.kaidev.gateway.GatewayApplication",
+      "projectName": "api-gateway",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "JWT_ISSUER": "http://localhost:8701",
+        "JWKS_URI": "http://localhost:8701/.well-known/jwks.json",
+        "AUTH_URL": "http://localhost:8701",
+        "USER_URL": "http://localhost:8702"
+      },
+      "vmArgs": "--enable-native-access=ALL-UNNAMED",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "All Services (Local)",
+      "configurations": [
+        "Auth Service",
+        "User Service",
+        "Gateway"
+      ],
+      "preLaunchTask": "local: prepare",
+      "stopAll": true
+    }
+  ]
+}

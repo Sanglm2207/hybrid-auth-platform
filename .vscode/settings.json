@@ -1,0 +1,17 @@
+{
+  "java.compile.nullAnalysis.mode": "automatic",
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.jdt.ls.java.home": "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-25",
+      "path": "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home",
+      "default": true
+    }
+  ],
+  "maven.terminal.useJavaHome": true,
+  "terminal.integrated.env.osx": {
+    "JAVA_HOME": "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home",
+    "PATH": "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin:${env:PATH}"
+  }
+}

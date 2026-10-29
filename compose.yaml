@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-authdev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
+      interval: 5s
+      retries: 15
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server","--appendonly","yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      retries: 15
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,10 @@
+server:
+  port: 8702
+app:
+  issuer: ${JWT_ISSUER:http://localhost:8701}
+  jwks-uri: ${JWKS_URI:http://localhost:8701/.well-known/jwks.json}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,24 @@
+server:
+  port: 8700
+app:
+  issuer: ${JWT_ISSUER:http://localhost:8701}
+  jwks-uri: ${JWKS_URI:http://localhost:8701/.well-known/jwks.json}
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: auth-service
+              uri: ${AUTH_URL:http://localhost:8701}
+              predicates:
+                - Path=/auth/**
+            - id: user-service
+              uri: ${USER_URL:http://localhost:8702}
+              predicates:
+                - Path=/users/**
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

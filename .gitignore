@@ -1,0 +1,6 @@
+keys/
+**/target/
+.vscode/*.log
+.env
+.DS_Store
+logs/
