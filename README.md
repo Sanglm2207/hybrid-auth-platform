@@ -2,6 +2,10 @@
 
 A runnable *learning/reference implementation* of JWT access tokens, opaque rotating refresh tokens, Redis-backed refresh sessions, PostgreSQL users, and a JWT-validating Spring Cloud Gateway. No Docker Desktop required; Docker CLI with a working daemon is sufficient.
 
+API response schema, validation rules, error codes, Gateway allowlists, and shared-module usage: [API contract](docs/API.md).
+
+Source packages and folder responsibilities: [Project structure](docs/PROJECT_STRUCTURE.md).
+
 ## Prerequisites
 - Docker Engine / Colima / OrbStack with Docker Compose v2
 - OpenSSL, JDK 25, Maven
@@ -27,7 +31,7 @@ The default local database password is `authdev`. The local `.env` is created fr
 
 To launch services individually, first run **Tasks: Run Task → local: prepare**, then choose **Auth Service**, **User Service**, or **Gateway** in Run and Debug. Wait for all services to finish startup before sending API requests. Stopping **All Services (Local)** stops all three Java processes; the databases stay running. Use **Tasks: Run Task → local: databases stop** to stop them without deleting data.
 
-The workspace selects the JDK 25 already installed on this Mac at `/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home` for Java tooling and new integrated terminals. On another machine, update the JDK paths in `.vscode/settings.json`. If Java diagnostics remain stale after a successful Maven build, run **Java: Clean Java Language Server Workspace** and reload.
+The workspace selects the JDK 25 already installed on this Mac at `/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home` for Java tooling and new integrated terminals. On another machine, update the JDK paths in `.vscode/settings.json`. If an individual service or VS Code cannot resolve `dev.kaidev.common`, run **Tasks: Run Task → maven: install shared modules** to install the parent POM and shared libraries into Maven local. After package moves, close tabs pointing to the old paths and reopen files from Explorer. If Java diagnostics remain stale, run **Java: Clean Java Language Server Workspace** and reload.
 
 Run all services from a terminal:
 ```bash
@@ -55,7 +59,7 @@ EMAIL_FROM=""
 Registration sends a six-digit email OTP and returns `emailVerified: false`, without tokens. Login and refresh require a verified email. Existing accounts must request an OTP with `/auth/resend-otp` before logging in again; previously issued access tokens remain valid until expiry. OTPs expire after five minutes, allow five attempts, and are stored as hashes. Resending requires a 60-second wait and replaces the previous code. Missing SMTP configuration or mail delivery failure returns HTTP 503; failed registration is rolled back so it can be retried.
 
 ## Functional test
-Passwords must contain at least 12 characters. Validation errors return HTTP 400 with field messages in `errors`; application errors include a `detail` message.
+Registration passwords must contain at least 12 characters and at most 72 UTF-8 bytes. Validation errors return HTTP 400 with field messages in the `errors` array; all business responses use the shared [API contract](docs/API.md).
 ```bash
 curl -i -X POST http://localhost:8700/auth/register -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
 # Read the OTP from your email and verify before logging in:
@@ -64,7 +68,7 @@ curl -i -X POST http://localhost:8700/auth/verify-email -H 'Content-Type: applic
 # curl -i -X POST http://localhost:8700/auth/resend-otp -H 'Content-Type: application/json' -d '{"email":"test@example.com"}'
 curl -s -X POST http://localhost:8700/auth/login -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
 ```
-Copy `accessToken` from the login JSON, then call:
+Copy `data.accessToken` from the login JSON, then call:
 ```bash
 curl http://localhost:8700/users/me -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
