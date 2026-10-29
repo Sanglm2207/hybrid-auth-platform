@@ -1,0 +1,9 @@
+Your email address has changed
+
+Your account email was changed to {{newEmail}} after verification.
+All refresh sessions have been revoked. Future sign-ins use the new address.
+If this was not you, contact your account administrator immediately.
+
+Best regards,
+{{signature}}
+Automated account security notification

@@ -1,6 +1,10 @@
 package dev.kaidev.auth.service;
 
 import dev.kaidev.auth.entity.AppUser;
+import dev.kaidev.auth.client.MailServiceClient;
+import dev.kaidev.auth.constant.AuthCode;
+import dev.kaidev.common.exception.ApiException;
+import java.util.Map;
 import dev.kaidev.auth.repository.UserRepository;
 
 import static org.assertj.core.api.Assertions.*;
@@ -16,9 +20,6 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -26,7 +27,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-@DataJpaTest(properties = {"spring.mail.host=smtp.test", "app.email-from=sender@example.com"})
+@DataJpaTest
 @Import({EmailVerificationService.class, EmailVerificationServiceTest.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class EmailVerificationServiceTest {
@@ -37,7 +38,7 @@ class EmailVerificationServiceTest {
 
     @Autowired EmailVerificationService service;
     @Autowired UserRepository users;
-    @MockitoBean JavaMailSender mail;
+    @MockitoBean MailServiceClient mail;
 
     @AfterEach
     void cleanUp() { users.deleteAll(); }
@@ -48,11 +49,11 @@ class EmailVerificationServiceTest {
     }
 
     private String lastOtp() {
-        ArgumentCaptor<SimpleMailMessage> messages = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mail, atLeastOnce()).send(messages.capture());
-        SimpleMailMessage message = messages.getValue();
-        assertThat(message.getTo()).containsExactly("test@example.com");
-        return message.getText().split(": ")[1].substring(0, 6);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> variables = ArgumentCaptor.forClass(Map.class);
+        verify(mail, atLeastOnce()).send(eq("test@example.com"), eq("email-verification"), variables.capture());
+        assertThat(variables.getValue()).containsEntry("expiresInMinutes", "5");
+        return variables.getValue().get("otp");
     }
 
     @Test
@@ -110,30 +111,17 @@ class EmailVerificationServiceTest {
         user = users.findById(user.id).orElseThrow();
         assertThat(user.emailOtpHash).isNotEqualTo(previousHash);
         assertThat(user.emailOtpAttempts).isZero();
-        verify(mail, times(2)).send(any(SimpleMailMessage.class));
+        verify(mail, times(2)).send(anyString(), anyString(), anyMap());
         service.verify("test@example.com", lastOtp());
     }
 
     @Test
     void failedMailDeliveryRollsBackRegistration() {
-        doThrow(new MailSendException("provider failure")).when(mail).send(any(SimpleMailMessage.class));
+        doThrow(new ApiException(AuthCode.EMAIL_DELIVERY_FAILED)).when(mail).send(anyString(), anyString(), anyMap());
         assertThatThrownBy(() -> service.register("test@example.com", "StrongPassword123!"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode().value()).isEqualTo(503));
         assertThat(users.findByEmail("test@example.com")).isEmpty();
-    }
-
-    @Test
-    void missingSmtpConfigurationDoesNotSendMail() {
-        UserRepository repository = mock(UserRepository.class);
-        when(repository.saveAndFlush(any(AppUser.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        EmailVerificationService unconfigured = new EmailVerificationService(repository,
-                new BCryptPasswordEncoder(4), mail, "", "");
-        assertThatThrownBy(() -> unconfigured.register("test@example.com", "StrongPassword123!"))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(503));
-        verifyNoInteractions(mail);
     }
 
     @Test
@@ -142,7 +130,7 @@ class EmailVerificationServiceTest {
         AppUser user = users.findByEmail("test@example.com").orElseThrow();
         user.emailOtpResendAt = Instant.now().minusSeconds(1);
         users.saveAndFlush(user);
-        doThrow(new MailSendException("provider failure")).when(mail).send(any(SimpleMailMessage.class));
+        doThrow(new ApiException(AuthCode.EMAIL_DELIVERY_FAILED)).when(mail).send(anyString(), anyString(), anyMap());
         assertThatThrownBy(() -> service.resend("test@example.com"))
                 .isInstanceOf(ResponseStatusException.class);
         service.verify("test@example.com", otp);

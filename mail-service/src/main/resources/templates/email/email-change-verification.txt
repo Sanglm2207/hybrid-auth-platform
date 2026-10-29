@@ -1,0 +1,10 @@
+Confirm your new email address
+
+Confirm ownership of this new email address with this one-time token:
+{{verificationToken}}
+Expires in {{expiresInMinutes}} minutes. The account email stays unchanged until confirmation.
+Do not share this token. If you did not request this change, ignore this email.
+
+Best regards,
+{{signature}}
+Automated account security notification

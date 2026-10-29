@@ -1,0 +1,6 @@
+Hello {{displayName}},
+Welcome to {{appName}}. Thanks for joining us!
+
+Best regards,
+{{signature}}
+Automated account security notification

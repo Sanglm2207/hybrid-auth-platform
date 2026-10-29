@@ -1,0 +1,9 @@
+Your new email address is confirmed
+
+This address is now verified and linked to your account.
+Sign in again using this address and your current password.
+All refresh sessions were revoked when the email change was confirmed.
+
+Best regards,
+{{signature}}
+Automated account security notification

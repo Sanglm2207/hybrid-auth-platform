@@ -2,10 +2,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-if [[ ! -f .env ]]; then
-  (umask 077; cp .env.example .env)
-  echo 'Created .env from .env.example'
-fi
+bash ./prepare-env.sh
 set -a
 source ./.env
 set +a
@@ -72,6 +69,7 @@ start_service() {
   exit 1
 }
 
+start_service mail-service "${MAIL_SERVICE_PORT:-8703}"
 start_service auth-service 8701
 start_service user-service 8702
 start_service api-gateway 8700

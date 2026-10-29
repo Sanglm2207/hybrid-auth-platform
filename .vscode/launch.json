@@ -3,6 +3,17 @@
   "configurations": [
     {
       "type": "java",
+      "name": "Mail Service",
+      "request": "launch",
+      "mainClass": "dev.kaidev.mail.MailApplication",
+      "projectName": "mail-service",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "vmArgs": "--enable-native-access=ALL-UNNAMED"
+    },
+    {
+      "type": "java",
       "name": "Auth Service",
       "request": "launch",
       "mainClass": "dev.kaidev.auth.AuthApplication",
@@ -57,6 +68,7 @@
     {
       "name": "All Services (Local)",
       "configurations": [
+        "Mail Service",
         "Auth Service",
         "User Service",
         "Gateway"

@@ -4,19 +4,6 @@ server:
 spring:
   application:
     name: auth-service
-  mail:
-    host: ${SMTP_HOST:}
-    port: ${SMTP_PORT:587}
-    username: ${SMTP_USER:}
-    password: ${SMTP_PASS:}
-    properties:
-      "[mail.smtp.auth]": true
-      "[mail.smtp.ssl.enable]": ${SMTP_SECURE:false}
-      "[mail.smtp.starttls.enable]": true
-      "[mail.smtp.starttls.required]": true
-      "[mail.smtp.connectiontimeout]": 5000
-      "[mail.smtp.timeout]": 5000
-      "[mail.smtp.writetimeout]": 5000
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/authdb}
     username: ${DB_USERNAME:auth}
@@ -35,14 +22,13 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER:http://localhost:8701}
 app:
-  email-from: ${EMAIL_FROM:}
+  mail-service:
+    url: ${MAIL_SERVICE_URL:http://127.0.0.1:8703}
+    api-key: ${MAIL_SERVICE_API_KEY:}
   issuer: ${JWT_ISSUER:http://localhost:8701}
   private-key: ${JWT_PRIVATE_KEY:./keys/private.pem}
   public-key: ${JWT_PUBLIC_KEY:./keys/public.pem}
 management:
-  health:
-    mail:
-      enabled: false
   endpoints:
     web:
       exposure:

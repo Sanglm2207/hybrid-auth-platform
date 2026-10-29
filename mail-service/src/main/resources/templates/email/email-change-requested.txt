@@ -1,0 +1,9 @@
+Email address change requested
+
+A request was made to change your account email to {{newEmail}}.
+Your current address remains active until the new address is verified.
+If this was not you, reset your password immediately. A password reset cancels pending email-change tokens.
+
+Best regards,
+{{signature}}
+Automated account security notification

@@ -1,6 +1,8 @@
 package dev.kaidev.auth.integration;
 
 import dev.kaidev.auth.dto.response.TokenResponse;
+import dev.kaidev.auth.client.MailServiceClient;
+import java.util.Map;
 import dev.kaidev.auth.entity.AppUser;
 import dev.kaidev.auth.repository.UserRepository;
 import dev.kaidev.auth.service.SessionService;
@@ -25,8 +27,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -34,13 +34,13 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:auth-http;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.mail.host=smtp.test", "app.email-from=sender@example.com"})
+        "spring.datasource.username=sa", "spring.datasource.password="})
 @AutoConfigureMockMvc
 class AuthHttpContractTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
     @Autowired ObjectMapper mapper;
-    @MockitoBean JavaMailSender mail;
+    @MockitoBean MailServiceClient mail;
     @MockitoBean SessionService sessions;
     private static Path directory;
 
@@ -121,9 +121,10 @@ class AuthHttpContractTest {
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"password\":\"StrongPassword123!\"}"))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"));
-        ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mail).send(message.capture());
-        String otp = message.getValue().getText().split(": ")[1].substring(0, 6);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> variables = ArgumentCaptor.forClass(Map.class);
+        verify(mail).send(eq("test@example.com"), eq("email-verification"), variables.capture());
+        String otp = variables.getValue().get("otp");
         mvc.perform(post("/api/v1/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"otp\":\"" + otp + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("EMAIL_VERIFIED"));

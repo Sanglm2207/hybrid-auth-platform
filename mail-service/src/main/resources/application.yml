@@ -1,0 +1,65 @@
+server:
+  address: ${MAIL_BIND_ADDRESS:127.0.0.1}
+  port: ${MAIL_SERVICE_PORT:8703}
+spring:
+  application:
+    name: mail-service
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASS:}
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.ssl.enable]": ${SMTP_SECURE:false}
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+app:
+  mail:
+    api-key: ${MAIL_SERVICE_API_KEY:}
+    from: ${EMAIL_FROM:}
+    signature: ${MAIL_SIGNATURE:Hybrid Auth Security Team}
+    templates:
+      email-verification:
+        subject: "Verify your email"
+        html: classpath:templates/email/email-verification.html
+        text: classpath:templates/email/email-verification.txt
+      welcome:
+        subject: "Welcome to {{appName}}"
+        html: classpath:templates/email/welcome.html
+        text: classpath:templates/email/welcome.txt
+      password-reset:
+        subject: "Reset your password"
+        html: classpath:templates/email/password-reset.html
+        text: classpath:templates/email/password-reset.txt
+      password-changed:
+        subject: "Your password has changed"
+        html: classpath:templates/email/password-changed.html
+        text: classpath:templates/email/password-changed.txt
+      email-change-verification:
+        subject: "Confirm your new email address"
+        html: classpath:templates/email/email-change-verification.html
+        text: classpath:templates/email/email-change-verification.txt
+      email-change-requested:
+        subject: "Email address change requested"
+        html: classpath:templates/email/email-change-requested.html
+        text: classpath:templates/email/email-change-requested.txt
+      email-changed:
+        subject: "Your email address has changed"
+        html: classpath:templates/email/email-changed.html
+        text: classpath:templates/email/email-changed.txt
+      email-change-confirmed:
+        subject: "Your new email address is confirmed"
+        html: classpath:templates/email/email-change-confirmed.html
+        text: classpath:templates/email/email-change-confirmed.txt
+management:
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info
