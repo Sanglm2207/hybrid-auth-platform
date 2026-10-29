@@ -56,7 +56,7 @@ public class AuthController {
         return ServletApi.success(AuthCode.EMAIL_VERIFIED, null);
     }
 
-    @PostMapping(ApiPaths.AUTH_V1 + "/resend-otp")
+    @PostMapping({ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/resend-verification"})
     ApiResponse<Void> resendOtp(@Valid @RequestBody EmailRequest request) {
         verification.resend(request.email());
         return ServletApi.success(AuthCode.OTP_REQUESTED, null);

@@ -92,9 +92,16 @@ class GatewayAccessTest {
     }
 
     @Test void unversionedAndFutureAuthPathsAreNotPublic() {
-        for (String path : new String[]{"/auth/login", "/api/v2/auth/login", "/api/v1/auth/logout-all"}) {
+        for (String path : new String[]{"/auth/login", "/api/v2/auth/login", "/api/v1/auth/logout-all", "/api/v1/auth/change-password", "/api/v1/auth/change-email"}) {
             client.post().uri(path).exchange().expectStatus().isUnauthorized()
                     .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
+        }
+    }
+
+    @Test void publicAccountRecoveryAndVerificationPathsReachAuthWithoutJwt() {
+        for (String path : new String[]{"/forgot-password", "/reset-password", "/confirm-email-change", "/resend-verification"}) {
+            client.post().uri("/api/v1/auth" + path).exchange().expectStatus().isEqualTo(502)
+                    .expectBody().jsonPath("$.code").isEqualTo("UPSTREAM_UNAVAILABLE");
         }
     }
 

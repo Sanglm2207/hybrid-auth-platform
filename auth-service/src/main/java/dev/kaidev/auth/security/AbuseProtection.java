@@ -32,6 +32,7 @@ public class AbuseProtection {
         return state.execute(RATE, List.of(state.key("rate:" + (login ? "login:" : "auth:") + ClientIdentity.hash(ip))),
                 Integer.toString(login ? loginLimit : otherLimit), Long.toString(windowMs));
     }
+    public void reset(String email) { attempt(email, "reset"); }
     public long lockedFor(String email) { return attempt(email, "check"); }
     public long failed(String email) { return attempt(email, "failure"); }
     public long succeeded(String email) { return attempt(email, "success"); }

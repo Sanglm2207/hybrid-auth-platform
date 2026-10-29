@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 /** Structured events deliberately exclude passwords, email addresses, IPs and tokens. */
 public final class SecurityAudit {
     public enum Event { LOGIN, LOGOUT, LOGOUT_ALL, REFRESH, REFRESH_REUSE, ACCOUNT_LOCKED,
+        PASSWORD_RESET_REQUESTED, PASSWORD_RESET, PASSWORD_CHANGED, EMAIL_CHANGE_REQUESTED, EMAIL_CHANGED, ACCOUNT_MAIL_FAILURE, ACCOUNT_RECOVERY_FAILURE,
         RATE_LIMITED, AUTHENTICATION_FAILURE, ACCESS_DENIED, SECURITY_STATE_FAILURE, JWT_KEYS_RELOADED }
     public enum Outcome { SUCCESS, FAILURE, DENIED, UNAVAILABLE }
     private static final ObjectMapper MAPPER = new ObjectMapper();

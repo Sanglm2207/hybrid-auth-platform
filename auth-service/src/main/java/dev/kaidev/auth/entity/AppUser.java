@@ -18,6 +18,10 @@ public class AppUser {
 
     @Column(nullable = false)
     public boolean emailVerified;
+    @Column(nullable = false)
+    public long credentialRevision;
+    public Instant passwordResetResendAt;
+    public Instant emailChangeResendAt;
     public String emailOtpHash;
     public Instant emailOtpExpiresAt;
     public Instant emailOtpResendAt;

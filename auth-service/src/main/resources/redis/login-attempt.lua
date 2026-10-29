@@ -1,4 +1,5 @@
 -- KEYS: failure counter, temporary lock. ARGV: operation, threshold, observation ms, lock ms.
+if ARGV[1] == 'reset' then redis.call('DEL', KEYS[1], KEYS[2]); return 0 end
 local ttl = redis.call('PTTL', KEYS[2])
 if ttl > 0 then return ttl end
 if ARGV[1] == 'check' then return 0 end

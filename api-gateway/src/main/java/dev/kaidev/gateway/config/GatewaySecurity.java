@@ -21,7 +21,8 @@ public class GatewaySecurity {
     @Bean
     SecurityWebFilterChain chain(ServerHttpSecurity http, ReactiveSecurityErrors errors) {
         return http.csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
-                .pathMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
+                .pathMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
+                        ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
                 .permitAll().anyExchange().authenticated()).oauth2ResourceServer(x -> x.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
     }
