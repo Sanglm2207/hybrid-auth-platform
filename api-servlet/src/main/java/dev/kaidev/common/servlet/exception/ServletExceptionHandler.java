@@ -21,7 +21,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class ServletExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<Object> business(ApiException exception) {
-        return failure(exception.apiCode(), List.of());
+        return ResponseEntity.status(exception.apiCode().status()).headers(exception.getHeaders())
+                .body(ApiResponse.failure(exception.apiCode(), List.of(), ServletApi.traceId()));
     }
 
     @Override

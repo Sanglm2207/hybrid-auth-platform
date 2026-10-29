@@ -5,6 +5,8 @@ import dev.kaidev.auth.entity.AppUser;
 import dev.kaidev.auth.repository.UserRepository;
 import dev.kaidev.auth.service.EmailVerificationService;
 import dev.kaidev.auth.service.SessionService;
+import dev.kaidev.auth.service.LoginService;
+import dev.kaidev.auth.security.AbuseProtection;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -18,13 +20,13 @@ class AuthControllerTest {
     private final UserRepository users = mock(UserRepository.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
     private final SessionService sessions = mock(SessionService.class);
-    private final AuthController controller = new AuthController(users, passwords, sessions, null,
+    private final AuthController controller = new AuthController(users, new LoginService(users, passwords, sessions, mock(AbuseProtection.class)), sessions, null,
             mock(EmailVerificationService.class));
 
     @Test
     void unverifiedUserCannotLogInEvenWithCorrectPassword() {
         AppUser user = new AppUser("test@example.com", "hash");
-        when(users.findByEmail(user.email)).thenReturn(Optional.of(user));
+        when(users.findByEmailForUpdate(user.email)).thenReturn(Optional.of(user));
         when(passwords.matches("StrongPassword123!", "hash")).thenReturn(true);
         assertThatThrownBy(() -> controller.login(new LoginRequest(user.email, "StrongPassword123!")))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
@@ -36,7 +38,7 @@ class AuthControllerTest {
     void verifiedUserCanLogIn() {
         AppUser user = new AppUser("test@example.com", "hash");
         user.emailVerified = true;
-        when(users.findByEmail(user.email)).thenReturn(Optional.of(user));
+        when(users.findByEmailForUpdate(user.email)).thenReturn(Optional.of(user));
         when(passwords.matches("StrongPassword123!", "hash")).thenReturn(true);
         controller.login(new LoginRequest(user.email, "StrongPassword123!"));
         verify(sessions).issue(user);

@@ -34,7 +34,7 @@ public class GatewayAccessFilter implements WebFilter, Ordered {
         cors.setAllowedOrigins(properties.allowedOrigins());
         cors.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", RequestTrace.HEADER));
-        cors.setExposedHeaders(List.of(RequestTrace.HEADER));
+        cors.setExposedHeaders(List.of(RequestTrace.HEADER, HttpHeaders.RETRY_AFTER));
         cors.setAllowCredentials(false);
         cors.setMaxAge(600L);
     }

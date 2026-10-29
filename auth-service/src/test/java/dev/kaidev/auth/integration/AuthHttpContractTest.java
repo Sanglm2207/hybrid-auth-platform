@@ -32,7 +32,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(properties = {
+@SpringBootTest(properties = {"app.jwt.key-set=",
         "spring.datasource.url=jdbc:h2:mem:auth-http;DB_CLOSE_DELAY=-1", "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa", "spring.datasource.password="})
 @AutoConfigureMockMvc
@@ -40,8 +40,10 @@ class AuthHttpContractTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
     @Autowired ObjectMapper mapper;
+    @Autowired dev.kaidev.auth.security.JwtKeyRing signingKeys;
     @MockitoBean MailServiceClient mail;
     @MockitoBean SessionService sessions;
+    @MockitoBean dev.kaidev.auth.security.AbuseProtection protection;
     private static Path directory;
 
     @DynamicPropertySource
@@ -154,6 +156,28 @@ class AuthHttpContractTest {
                 .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(body).doesNotContain("secret-internal-detail", "stackTrace");
+    }
+
+    @Test void temporaryLockReturnsRetryAfterWithSharedEnvelope() throws Exception {
+        when(protection.lockedFor("test@example.com")).thenReturn(1200L);
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"test@example.com\",\"password\":\"StrongPassword123!\"}"))
+                .andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "2"))
+                .andExpect(jsonPath("$.code").value("ACCOUNT_TEMPORARILY_LOCKED"));
+        verifyNoInteractions(sessions);
+    }
+
+    @Test void logoutAllRequiresJwtAndRevokesOnlyItsAuthenticatedSubject() throws Exception {
+        mvc.perform(post("/api/v1/auth/logout-all")).andExpect(status().isUnauthorized());
+        java.util.UUID actor = java.util.UUID.randomUUID();
+        var now = java.time.Instant.now();
+        var claims = org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
+                .issuer("http://localhost:8701").subject(actor.toString()).audience(java.util.List.of("hybrid-api"))
+                .issuedAt(now).expiresAt(now.plusSeconds(900)).build();
+        String token = signingKeys.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(claims)).getTokenValue();
+        mvc.perform(post("/api/v1/auth/logout-all").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("ALL_DEVICES_LOGGED_OUT"));
+        verify(sessions).revokeAll(actor);
     }
 
     @Test void jwksRetainsStandardShape() throws Exception {

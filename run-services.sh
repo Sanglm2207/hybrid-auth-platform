@@ -14,7 +14,7 @@ fi
 if [[ -n "${JAVA_HOME:-}" ]]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
-for tool in java mvn docker curl openssl; do
+for tool in java mvn docker curl openssl python3; do
   command -v "$tool" >/dev/null || { echo "Missing required command: $tool" >&2; exit 1; }
 done
 java_version=$(java -version 2>&1)
@@ -23,9 +23,10 @@ if [[ ! "$java_version" =~ version\ \"25[.\"] ]]; then
   exit 1
 fi
 
-if [[ ! -f keys/private.pem || ! -f keys/public.pem ]]; then
-  bash ./generate-keys.sh
-fi
+bash ./prepare-jwt.sh
+set -a
+source ./.env
+set +a
 docker compose up -d --wait postgres redis
 mvn -B -ntp verify
 mkdir -p logs

@@ -17,25 +17,27 @@ import dev.kaidev.common.api.response.ApiResponse;
 import dev.kaidev.common.exception.ApiException;
 import dev.kaidev.common.servlet.support.ServletApi;
 
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.JWKSet;
+import dev.kaidev.auth.security.JwtKeyRing;
+import dev.kaidev.auth.service.LoginService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import java.util.UUID;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class AuthController {
     private final UserRepository users;
-    private final PasswordEncoder passwords;
+    private final LoginService login;
     private final SessionService sessions;
-    private final RSAKey key;
+    private final JwtKeyRing key;
     private final EmailVerificationService verification;
 
-    AuthController(UserRepository users, PasswordEncoder passwords, SessionService sessions, RSAKey key,
+    AuthController(UserRepository users, LoginService login, SessionService sessions, JwtKeyRing key,
             EmailVerificationService verification) {
         this.users = users;
-        this.passwords = passwords;
+        this.login = login;
         this.sessions = sessions;
         this.key = key;
         this.verification = verification;
@@ -62,11 +64,7 @@ public class AuthController {
 
     @PostMapping(ApiPaths.AUTH_V1 + "/login")
     ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        AppUser user = users.findByEmail(request.email()).orElseThrow(() -> new ApiException(AuthCode.INVALID_CREDENTIALS));
-        if (!passwords.matches(request.password(), user.passwordHash))
-            throw new ApiException(AuthCode.INVALID_CREDENTIALS);
-        if (!user.emailVerified) throw new ApiException(AuthCode.EMAIL_NOT_VERIFIED);
-        return ServletApi.success(AuthCode.LOGGED_IN, sessions.issue(user));
+        return ServletApi.success(AuthCode.LOGGED_IN, login.login(request.email(), request.password()));
     }
 
     @PostMapping(ApiPaths.AUTH_V1 + "/refresh")
@@ -80,7 +78,16 @@ public class AuthController {
         return ServletApi.success(AuthCode.LOGGED_OUT, null);
     }
 
+    @PostMapping(ApiPaths.AUTH_V1 + "/logout-all")
+    ApiResponse<Void> logoutAll(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId;
+        try { userId = UUID.fromString(jwt.getSubject()); }
+        catch (IllegalArgumentException e) { throw new ApiException(dev.kaidev.common.api.code.CommonCode.UNAUTHENTICATED); }
+        sessions.revokeAll(userId);
+        return ServletApi.success(AuthCode.ALL_DEVICES_LOGGED_OUT, null);
+    }
+
     // OAuth2 consumers require the standard JWKS shape, not an API envelope.
     @GetMapping("/.well-known/jwks.json")
-    Object jwks() { return new JWKSet(key.toPublicJWK()).toJSONObject(); }
+    Object jwks() { return key.publicKeys().toJSONObject(); }
 }

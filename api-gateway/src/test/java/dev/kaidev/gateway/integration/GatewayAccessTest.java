@@ -18,6 +18,7 @@ import reactor.core.publisher.Mono;
         "app.gateway.allowed-hosts=localhost,127.0.0.1,[::1]",
         "app.gateway.allowed-origins=https://client.example.com",
         "app.gateway.require-origin=false",
+        "app.auth-proxy-key=test-proxy-key-at-least-thirty-two-characters",
         "AUTH_URL=http://127.0.0.1:1"})
 class GatewayAccessTest {
     @Autowired WebTestClient client;
@@ -74,6 +75,8 @@ class GatewayAccessTest {
         client.get().uri("/api/v1/users/me").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .exchange().expectStatus().isUnauthorized()
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://client.example.com")
+                .expectHeader().value(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        value -> org.assertj.core.api.Assertions.assertThat(value).contains("X-Request-Id", "Retry-After"))
                 .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
         client.get().uri("/api/v1/users/me").headers(headers -> headers.setBearerAuth("bad-token"))
                 .exchange().expectStatus().isUnauthorized().expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
@@ -89,7 +92,7 @@ class GatewayAccessTest {
     }
 
     @Test void unversionedAndFutureAuthPathsAreNotPublic() {
-        for (String path : new String[]{"/auth/login", "/api/v2/auth/login"}) {
+        for (String path : new String[]{"/auth/login", "/api/v2/auth/login", "/api/v1/auth/logout-all"}) {
             client.post().uri(path).exchange().expectStatus().isUnauthorized()
                     .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
         }

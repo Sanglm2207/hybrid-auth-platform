@@ -18,8 +18,7 @@
       "type": "process",
       "command": "bash",
       "args": [
-        "-c",
-        "if [[ -f keys/private.pem && -f keys/public.pem ]]; then echo 'Using existing JWT keys'; else bash ./generate-keys.sh; fi"
+        "./prepare-jwt.sh"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

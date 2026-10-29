@@ -1,4 +1,5 @@
 server:
+  forward-headers-strategy: none
   address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8701
 spring:
@@ -14,6 +15,8 @@ spring:
     open-in-view: false
   data:
     redis:
+      connect-timeout: 2s
+      timeout: 2s
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
   security:
@@ -22,6 +25,18 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER:http://localhost:8701}
 app:
+  auth-proxy-key: ${AUTH_PROXY_KEY:}
+  jwt:
+    key-set: ${JWT_KEY_SET:}
+    reload-ms: 5000
+  security:
+    login-ip-limit: ${LOGIN_IP_LIMIT:20}
+    auth-ip-limit: ${AUTH_IP_LIMIT:60}
+    rate-window-seconds: ${AUTH_RATE_WINDOW_SECONDS:60}
+    login-failure-threshold: ${LOGIN_FAILURE_THRESHOLD:5}
+    login-observation-seconds: ${LOGIN_OBSERVATION_SECONDS:900}
+    login-lock-seconds: ${LOGIN_LOCK_SECONDS:300}
+    refresh-ttl-seconds: 604800
   mail-service:
     url: ${MAIL_SERVICE_URL:http://127.0.0.1:8703}
     api-key: ${MAIL_SERVICE_API_KEY:}
