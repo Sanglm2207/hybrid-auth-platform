@@ -48,6 +48,18 @@ public class ServletExceptionHandler extends ResponseEntityExceptionHandler {
         return failure(CommonCode.CONFLICT, List.of());
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    ResponseEntity<Object> denied(org.springframework.security.access.AccessDeniedException exception) {
+        dev.kaidev.common.security.SecurityAudit.record(dev.kaidev.common.security.SecurityAudit.Event.ACCESS_DENIED,
+                dev.kaidev.common.security.SecurityAudit.Outcome.DENIED, null, ServletApi.traceId());
+        return failure(CommonCode.ACCESS_DENIED, List.of());
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    ResponseEntity<Object> unauthenticated(org.springframework.security.core.AuthenticationException exception) {
+        return failure(CommonCode.UNAUTHENTICATED, List.of());
+    }
+
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception exception, Object body, HttpHeaders headers,
             HttpStatusCode status, WebRequest request) {

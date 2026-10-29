@@ -10,6 +10,14 @@ import org.slf4j.LoggerFactory;
 import static org.assertj.core.api.Assertions.*;
 
 class SecurityAuditTest {
+    @Test void detailsAcceptOnlyControlledIdsAndPolicyFields() {
+        String target=java.util.UUID.randomUUID().toString();
+        var safe=SecurityAudit.safeDetails(java.util.Map.of("targetUserId",target,"password","secret","email","private@example.com",
+                "rolesAfter",java.util.List.of("USER","password=secret"),"sessionId","token=secret"));
+        assertThat(safe).containsEntry("targetUserId",target).containsEntry("rolesAfter",java.util.List.of("USER"));
+        assertThat(safe.toString()).doesNotContain("secret","private@example.com");
+    }
+
     @Test void auditIsJsonAndDoesNotAcceptCredentialsOrLogInjectionAsIdentity() throws Exception {
         var logger = (Logger) LoggerFactory.getLogger("security.audit");
         var captured = new ListAppender<ILoggingEvent>(); captured.start(); logger.addAppender(captured);
