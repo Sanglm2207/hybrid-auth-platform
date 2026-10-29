@@ -1,4 +1,5 @@
 server:
+  address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8702
 app:
   issuer: ${JWT_ISSUER:http://localhost:8701}
