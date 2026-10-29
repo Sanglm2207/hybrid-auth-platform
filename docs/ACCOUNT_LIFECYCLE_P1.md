@@ -1,5 +1,7 @@
 # P1 account lifecycle
 
+**P2 update:** the current system additionally checks live account/session state on JWT-bearing requests. Session revocation, credential changes and deactivation now reject old JWTs on subsequent checks; User stores profiles in its own database. Historical stateless-access limitations below are superseded by [P2 session and identity management](SESSION_IDENTITY_P2.md).
+
 Email verification and resend were already implemented and are retained. Registration still uses a random six-digit, single-use OTP stored as a BCrypt hash, with a five-minute TTL, five attempts, and a 60-second resend cooldown. `/resend-verification` is an alias for the existing `/resend-otp`; both use the same service and state.
 
 P1 adds forgot/reset password, authenticated password changes, and email changes confirmed through the new inbox. All URLs below start with `/api/v1/auth`.
@@ -19,7 +21,7 @@ All success responses are HTTP 200 with the shared envelope and `data: null`. No
 ## Forgot and reset password
 
 1. Submit `{ "email": "owner@example.com" }` to `/forgot-password`.
-2. The HTTP request places work in a bounded in-memory executor **before any account lookup or SMTP call** and returns the same generic response for known and unknown emails. Workers propagate the request trace ID. A full queue returns a generic HTTP 503, independently of account existence.
+2. The HTTP request places work in a durable encrypted PostgreSQL outbox **before any account lookup or SMTP call** and returns the same generic response for known and unknown emails. Workers propagate the request trace ID. Storage failure returns a generic HTTP 503, independently of account existence.
 3. For an existing account outside its 60-second cooldown, a worker generates a 32-byte random opaque token, stores only its SHA-256 hash in PostgreSQL, and sends the `password-reset` template to the account email. Another accepted request after the cooldown replaces the old reset token. Unknown accounts and requests within cooldown send nothing. Delivery failures roll the token/cooldown transaction back and are recorded without changing the already returned public response.
 4. Submit `{ "token": "<token from email>", "newPassword": "<new password>" }` to `/reset-password` within 15 minutes.
 5. Auth changes the BCrypt password hash, increments the credential revision, invalidates every pending reset/email-change token, clears temporary login lockout, and revokes all refresh sessions. The user must log in with the new password. Reset does not implicitly verify an unverified account email.
@@ -27,7 +29,7 @@ All success responses are HTTP 200 with the shared envelope and `data: null`. No
 
 The reset token is not a JWT. An access JWT cannot be used as a reset proof. Invalid, expired, already used, superseded, wrong-purpose, or old-credential-revision tokens return the same HTTP 400 `INVALID_ACCOUNT_TOKEN`. New passwords equal to the current password return HTTP 400 `PASSWORD_UNCHANGED` without consuming the proof.
 
-The queue is local process memory, not a durable job system. Shutdown waits up to 20 seconds for queued work; a crash or an overloaded shutdown can lose accepted recovery requests. There is no delivery-status API or automatic retry; the user can request again after the cooldown. For durable acceptance, replace dispatch with a persistent queue/outbox.
+Recovery and mail jobs survive process restarts. Workers claim with SQL leases, retry delivery and erase expired/completed payloads. See [hardening operations](HARDENING_RELIABILITY.md).
 
 ## Change password
 
@@ -56,9 +58,9 @@ Each sensitive mutation locks the user row. Token lookup first reads only its us
 
 Login password validation and refresh issuance also lock the same user row in their SQL transaction. An old-password login cannot finish minting a session after a password reset has revoked the account's sessions; in-flight login/refresh operations finish before the credential mutation, or observe its new state afterward.
 
-Refresh revocation is performed before committing the SQL credential change. Redis failure aborts the SQL mutation, preserving the previous password/email and token use state. SQL and Redis are not a distributed transaction: a later SQL failure can revoke extra sessions, which is safe but requires a new login. Proof-email submission also cannot commit atomically with SQL; an email can be accepted before a later SQL failure. No durable outbox is implemented.
+Refresh revocation, credential changes, proof consumption and encrypted mail jobs commit together in SQL. SMTP runs afterward; transient failures retry. Redis loss cannot undo SQL revocation.
 
-**Existing access JWTs remain usable until expiry plus validator clock skew.** P1 revokes future refreshes and requires the current password for authenticated sensitive changes; it does not add per-request access-token introspection or a denylist.
+**P2 update:** existing JWTs are now rejected on subsequent live state checks after credential changes or deactivation. The P1 mutation and refresh-revocation rules are unchanged; see the P2 guide for availability and in-flight request limits.
 
 ## Signed email templates
 
@@ -85,20 +87,20 @@ The signature is a configured sender footer, not a cryptographic email signature
 
 Templates show copyable opaque tokens for these API-based flows; this repository does not add a frontend reset/confirmation page or construct links from incoming Host headers. Add a fixed, trusted frontend URL and proper URL-context encoding if introducing clickable links later.
 
-Proof mail must be submitted successfully before its SQL transaction commits. Notifications about completed changes use after-commit listeners: a notification failure is audited and cannot undo the committed account update or make the API report that the update failed. Notifications are best-effort and synchronous after commit; delivery retries/history remain outside this implementation.
+Proof and notice jobs must be enqueued in the account SQL transaction before commit. Enqueue failure rolls the mutation back; SMTP failure afterward retries through the outbox. Delivery IDs are stable across retries and Mail keeps successful receipts.
 
 ## Configuration and operations
 
 | Setting | Default |
 | --- | --- |
 | `MAIL_SIGNATURE` | `Hybrid Auth Security Team` |
-| `app.account.recovery-workers` | 2 |
-| `app.account.recovery-queue-capacity` | 100 |
+| `MAIL_OUTBOX_ENCRYPTION_KEY` | Generated AES-256 key; retain across restarts |
+| `app.outbox.poll-ms` | 1000 |
 | Reset/email-change token TTL | 15 minutes |
 | Proof-email resend cooldown | 60 seconds |
 
 P0 IP throttling still applies to these POST endpoints. Audit events include `PASSWORD_RESET_REQUESTED`, `PASSWORD_RESET`, `PASSWORD_CHANGED`, `EMAIL_CHANGE_REQUESTED`, `EMAIL_CHANGED`, `ACCOUNT_MAIL_FAILURE`, and `ACCOUNT_RECOVERY_FAILURE`, without emails/passwords/tokens in their payloads.
 
-Restart Auth, Gateway, and Mail to apply the new endpoints/templates; Auth runs the schema migration automatically. Existing P0 Redis session format and registration verification codes are retained. Run `mvn verify` for token lifetime/purpose/replay/concurrency, rollback, session ordering, HTTP authorization, queue dispatch, and signed HTML/text template tests.
+Restart Auth, Gateway, and Mail to apply the new endpoints/templates; Auth runs the schema migration automatically. V5 requires a new login for SQL session ledgers; OTP verification contracts are retained. Run `mvn verify` for token lifetime/purpose/replay/concurrency, rollback, session ordering, HTTP authorization, queue dispatch, and signed HTML/text template tests.
 
 References: [OWASP password recovery](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) and [OWASP reauthentication for sensitive changes](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html).

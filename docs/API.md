@@ -47,7 +47,16 @@ POST endpoints consume `application/json`, except `/api/v1/auth/logout-all`, whi
 | `POST /api/v1/auth/refresh` | `refreshToken` | 200 `TOKEN_REFRESHED` | Same token fields as login |
 | `POST /api/v1/auth/logout` | `refreshToken` | 200 `LOGGED_OUT` | `null` |
 | `POST /api/v1/auth/logout-all` | Bearer access token; no body | 200 `ALL_DEVICES_LOGGED_OUT` | `null` |
-| `GET /api/v1/users/me` | Bearer access token | 200 `OK` | `id`, `roles` |
+| `GET /api/v1/auth/sessions` | Bearer JWT; `sessions:read` | 200 `OK` | Owned active sessions |
+| `DELETE /api/v1/auth/sessions/{id}` | Bearer JWT; `sessions:revoke` | 200 `SESSION_REVOKED` | `null` |
+| `GET /api/v1/auth/devices` | Bearer JWT; `devices:read` | 200 `OK` | Owned device history |
+| `DELETE /api/v1/auth/devices/{id}` | Bearer JWT; `devices:revoke` | 200 `DEVICE_REVOKED` | `null` |
+| `POST /api/v1/auth/deactivate` | Bearer JWT; `currentPassword` | 200 `ACCOUNT_DEACTIVATED` | `null` |
+| `GET /api/v1/auth/roles`, `GET /api/v1/auth/permissions` | Bearer JWT; `roles:manage` | 200 `OK` | Policy/catalog |
+| `POST /api/v1/auth/roles`, `PUT /api/v1/auth/roles/{name}/permissions` | Admin JWT; `name`, `permissions`, `currentPassword` | 200 `ROLE_UPDATED` | Role definition |
+| `PUT /api/v1/auth/users/{id}/roles` | Admin JWT; `roles`, `currentPassword` | 200 `ROLES_UPDATED` | Assigned roles |
+| `GET /api/v1/users/me` | Bearer JWT; `profile:read` | 200 `OK` | `id`, `roles`, profile fields/version |
+| `PATCH /api/v1/users/me` | Bearer JWT; `profile:write`; partial profile fields | 200 `OK` | Updated profile |
 
 Logout now returns **200 with JSON**, replacing the earlier 204 response. Tokens now live under `data`, for example `response.data.accessToken`.
 
@@ -67,30 +76,30 @@ Mail runs a separate internal API on port `8703` at `/api/v1/mail/**`, authentic
 
 | HTTP status | Codes |
 | --- | --- |
-| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST`, `INVALID_OTP`, `INVALID_ACCOUNT_TOKEN`, `PASSWORD_UNCHANGED`, `EMAIL_UNCHANGED` |
+| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST`, `INVALID_OTP`, `INVALID_ACCOUNT_TOKEN`, `PASSWORD_UNCHANGED`, `EMAIL_UNCHANGED`, `INVALID_ROLE_POLICY` |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN` |
 | 403 | `ACCESS_DENIED`, `EMAIL_NOT_VERIFIED`, `HOST_NOT_ALLOWED`, `ORIGIN_NOT_ALLOWED`, `CORS_REJECTED` |
 | 404 | `NOT_FOUND` |
 | 405 | `METHOD_NOT_ALLOWED` |
 | 409 | `EMAIL_EXISTS`, `CONFLICT` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| 429 | `OTP_COOLDOWN`, `OTP_ATTEMPTS_EXCEEDED`, `TOO_MANY_REQUESTS`, `RATE_LIMITED`, `ACCOUNT_TEMPORARILY_LOCKED`, `ACCOUNT_ACTION_COOLDOWN` |
+| 429 | `OTP_COOLDOWN`, `OTP_ATTEMPTS_EXCEEDED`, `TOO_MANY_REQUESTS`, `RATE_LIMITED`, `ACCOUNT_TEMPORARILY_LOCKED`, `ACCOUNT_ACTION_COOLDOWN`, `SESSION_LIMIT_REACHED` |
 | 500 | `INTERNAL_ERROR` |
 | 502 | `UPSTREAM_UNAVAILABLE` |
 | 503 | `EMAIL_NOT_CONFIGURED`, `EMAIL_DELIVERY_FAILED`, `SECURITY_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
 | 504 | `UPSTREAM_TIMEOUT` |
 
-Known business failures have public catalog messages. Unexpected failures return a generic message; exception text, SQL, provider responses, and stack traces are excluded from the response. Missing and invalid JWTs use the same shared envelope in every service. Access JWT validation is stateless; refresh sessions, rate limiting, and lockout use shared Redis state.
+Known business failures have public catalog messages. Unexpected failures return a generic message; exception text, SQL, provider responses, and stack traces are excluded from the response. Missing and invalid JWTs use the same shared envelope in every service. JWT signature validation is local; P2 also checks live account/session state and current permissions through Auth. User owns profile data in a separate database.
 
 ## P1 account lifecycle
 
-Verification/resend keep their existing one-time hashed OTPs; `resend-verification` aliases `resend-otp`. Forgot-password responds generically before lookup/delivery using a bounded background executor. Reset and email-change tokens are random, single-use opaque values with a 15-minute TTL and SHA-256 hashes in SQL. Authenticated password/email changes require the current password. Confirming the new inbox is required before replacing the account email. Reset/change invalidates pending lifecycle proofs and all refresh sessions; issued access JWTs still expire normally.
+Verification/resend keep their existing one-time hashed OTPs; `resend-verification` aliases `resend-otp`. Forgot-password responds generically before lookup/delivery using a durable encrypted SQL outbox. Reset and email-change tokens are random, single-use opaque values with a 15-minute TTL and SHA-256 hashes in SQL. Authenticated password/email changes require the current password. Confirming the new inbox is required before replacing the account email. Reset/change invalidates pending lifecycle proofs and all refresh sessions; P2 state checks also reject previously issued JWTs after invalidation.
 
 Every email template includes a Mail-managed signature configured with `MAIL_SIGNATURE`. See [P1 account lifecycle](ACCOUNT_LIFECYCLE_P1.md) for request/response behavior, cooldowns, concurrency, and notification delivery.
 
 ## P0 authentication controls
 
-Refresh rotation is atomic across Auth instances. Reusing a consumed token revokes its whole family; clients must serialize refresh attempts. Refresh families have a seven-day absolute expiry. Logout-all invalidates all existing refresh generations for the JWT subject; issued access JWTs still remain valid until expiry.
+Refresh rotation is atomic across Auth instances. Reusing a consumed token revokes its whole family; clients must serialize refresh attempts. Refresh families have a seven-day absolute expiry. Logout-all invalidates all existing refresh generations for the JWT subject; P2 live state checks reject invalidated JWTs before their cryptographic expiry.
 
 Login rate limiting and temporary lockout return HTTP 429 with `Retry-After` and stable `RATE_LIMITED` / `ACCOUNT_TEMPORARILY_LOCKED` codes. Redis security failures return HTTP 503 (`SECURITY_UNAVAILABLE`). Gateway and Auth share an `AUTH_PROXY_KEY` generated during preparation for trustworthy client-IP propagation. See [P0 security hardening](SECURITY_P0.md) for configuration, migration, key-rotation commands, and audit events.
 
@@ -106,11 +115,15 @@ GATEWAY_REQUIRE_ORIGIN=false
 
 `GATEWAY_ALLOWED_HOSTS` is the exact list of API hostnames in the incoming `Host` header, without scheme or port. It identifies the requested API hostname, not the caller's hostname. `GATEWAY_ALLOWED_ORIGINS` is the exact list of frontend origins including scheme and optional port, without a trailing slash or path. Wildcards are rejected at startup. Configure actual deployment domains before exposing the Gateway.
 
-Unknown hosts and supplied unknown origins are rejected before proxying, even outside a browser. CORS allows GET, POST, OPTIONS and the Authorization, Content-Type, X-Request-Id headers. Only approved origins receive CORS response headers; `X-Request-Id` and `Retry-After` are exposed for browser clients. Cookies/credentialed CORS are disabled because the current API uses Bearer tokens.
+Unknown hosts and supplied unknown origins are rejected before proxying, even outside a browser. CORS allows GET, POST, PATCH, PUT, DELETE, OPTIONS and the Authorization, Content-Type, X-Device-Id, X-Request-Id headers. Only approved origins receive CORS response headers; `X-Request-Id` and `Retry-After` are exposed for browser clients. Cookies/credentialed CORS are disabled because the current API uses Bearer tokens.
 
 When `GATEWAY_REQUIRE_ORIGIN=false`, requests without Origin can be made by terminal/API clients and health checks. When `true`, API requests also require an approved Origin; GET `/actuator/health` remains available without it. Client-supplied Forwarded/X-Forwarded headers are removed before host checking; the application does not derive the trusted host from them.
 
 Host and Origin are not caller authentication: non-browser clients can set both. Protected endpoints continue to require JWT. Restrict network access or use mTLS/client authentication if only specific backend callers should connect. Auth/User bind to `127.0.0.1` by default to avoid bypassing the Gateway remotely; a private-network deployment can explicitly set `SERVICE_BIND_ADDRESS`.
+
+## P2 state checks and profile ownership
+
+Gateway and User validate JWTs locally, then call Auth's private `/internal/identity/check` using `IDENTITY_SERVICE_KEY`. Auth checks account activation, credential revision, refresh-family state and session generation, and returns live role permissions. Denied identities return 401; unavailable remote checks fail closed with 503. This endpoint is not routed through Gateway. Profile data is stored only in User's `userdb`; identity/role/device data remains in Auth's `authdb`. See [P2 session and identity management](SESSION_IDENTITY_P2.md).
 
 ## Reuse in another service
 
@@ -121,3 +134,5 @@ Host and Origin are not caller authentication: non-browser clients can set both.
 Add the matching dependency, implement `ApiCode` in a service-specific enum for domain messages, throw `ApiException(code)`, and return `ServletApi.success(code, data)` from business controllers. Configure Spring Security with the injected `ServletSecurityErrors` (or `ReactiveSecurityErrors`) for both exception handling and OAuth2 resource-server failures. New services receive the common behavior through Boot auto-configuration, without copying handlers.
 
 Application log helpers emit event, stable code, status/duration, exception class and traceId. They exclude raw request bodies, credentials, OTPs, tokens and provider exception messages. Auth DTO/token `toString()` methods redact sensitive values. Framework DEBUG/TRACE logging is separate and can expose request/exception contents; use normal application logging for credentials-bearing traffic.
+
+Last-admin removal returns `409 LAST_ADMINISTRATOR`. Mail delivery is asynchronous from Auth; a successful lifecycle response confirms durable enqueue. Internal Mail accepts a UUID `Idempotency-Key` and rejects different content under the same ID with 409. See [hardening operations](HARDENING_RELIABILITY.md).

@@ -1,6 +1,8 @@
 # P0 security hardening
 
-The Auth service now shares its security state through Redis across instances. Access JWT validation remains local and stateless in Gateway, Auth, and User. This implementation covers atomic refresh rotation/reuse detection, logout-all, IP rate limits, temporary account lockout, JWT key rotation, and structured security audit logs.
+**P2 update:** the current system additionally checks live account/session state on JWT-bearing requests. Session revocation, credential changes and deactivation now reject old JWTs on subsequent checks; User stores profiles in its own database. Historical stateless-access limitations below are superseded by [P2 session and identity management](SESSION_IDENTITY_P2.md).
+
+Auth shares abuse counters and refresh cache through Redis; SQL owns durable session revocation/replay history across instances. JWT signature validation remains local in Gateway, Auth, and User; P2 adds the live state checks described above. This implementation covers atomic refresh rotation/reuse detection, logout-all, IP rate limits, temporary account lockout, JWT key rotation, and structured security audit logs.
 
 ## Session lifecycle
 
@@ -19,11 +21,11 @@ POST /api/v1/auth/logout-all
 Authorization: Bearer <access-token>
 ```
 
-No JSON body is required, and request data cannot choose which user is logged out. Auth derives the user ID from the verified JWT subject and atomically increments that user's Redis session generation. Every existing refresh family carries its issuing generation; stale generations can no longer rotate. New logins use the new generation. A rotation racing with logout-all cannot recreate a usable old-generation session.
+No JSON body is required, and request data cannot choose which user is logged out. Auth derives the user ID from the verified JWT subject and atomically increments that user's SQL session generation. Every existing refresh family carries its issuing generation; stale generations can no longer rotate. New logins use the new generation. A rotation racing with logout-all cannot recreate a usable old-generation session.
 
 Success returns HTTP 200, code `ALL_DEVICES_LOGGED_OUT`, and `data: null`. Missing/invalid access JWTs return HTTP 401 at both Gateway and Auth.
 
-**Access JWTs already issued remain valid for up to 15 minutes, plus configured validator clock skew.** Logout, logout-all, and refresh replay revoke future refreshes. Immediate access-token revocation is not included: it requires a state check, denylist, or introspection on protected requests.
+**P2 supersedes the original access-token limitation:** logout, logout-all and replay revocation now deny old JWTs on subsequent live identity checks. Their signatures still have a 15-minute expiry plus clock skew, but applications require current account/session state as well. Already authorized in-flight requests are not canceled across services.
 
 ### Redis layout and rollout
 
@@ -38,7 +40,7 @@ The default namespace is `security:{auth}:`. All script keys use the same Redis 
 | `failures:<email-hash>` | Incorrect password counter | Observation window |
 | `lock:<email-hash>` | Temporary lock flag | Lock duration |
 
-Redis failures return HTTP 503 (`SECURITY_UNAVAILABLE`) and deny the operation; there is no per-instance memory fallback. Connection and command timeouts default to two seconds. Use a private, authenticated Redis deployment with persistence, backups, and a `noeviction` policy for security state. Lua atomicity does not prevent state loss during Redis data loss or asynchronous-replication failover. Losing a user's generation while retaining its old token records can undo logout-all, so restore/version state consistently or invalidate the entire session namespace after recovery.
+Redis failures return HTTP 503 (`SECURITY_UNAVAILABLE`) and deny the operation; there is no per-instance memory fallback. Connection and command timeouts default to two seconds. Use a private, authenticated Redis deployment with persistence, backups, and a `noeviction` policy for security state. SQL session generations, revocation and replay history now remain authoritative during Redis loss/failover. Redis loss may require a new login and resets abuse counters, but cannot resurrect a SQL-revoked session. See [durability and disaster recovery](HARDENING_RELIABILITY.md).
 
 Legacy `refresh:*` / `family:*` records are not accepted by the new implementation. Rolling out this change requires users to log in again. Do not run old and new Auth binaries against public traffic simultaneously: old binaries do not enforce the new policies. Expired legacy keys can age out naturally; the application does not flush Redis.
 
@@ -62,7 +64,7 @@ Account lockout is keyed by normalized email across all client IPs. Known and un
 
 ### Trusted client identity
 
-Auth ignores arbitrary `Forwarded` / `X-Forwarded-For` headers. Gateway removes caller-supplied `X-Auth-Client-*` headers, then signs its actual TCP peer IP, request timestamp, HTTP method, and raw path using HMAC-SHA256 and `AUTH_PROXY_KEY`. Auth uses that IP only for a valid, fresh signature with exactly one of each header. Unsigned, expired, duplicate, or invalid proofs fall back to Auth's actual peer address.
+Auth ignores arbitrary `Forwarded` / `X-Forwarded-For` headers. Gateway removes caller-supplied `X-Auth-Client-*` headers, then resolves the client through an explicit `GATEWAY_TRUSTED_PROXIES` allowlist (empty by default) and signs that IP, request timestamp, HTTP method, and raw path using HMAC-SHA256 and `AUTH_PROXY_KEY`. Auth uses that IP only for a valid, fresh signature with exactly one of each header. Unsigned, expired, duplicate, or invalid proofs fall back to Auth's actual peer address.
 
 Gateway refuses to proxy Auth paths when its shared key is missing/too short. Auth still rate-limits direct requests by their peer address. Keep Auth private and use TLS for nonlocal service traffic: a stolen internal identity proof can be replayed within its short validity window. With another reverse proxy before Gateway, the default bucket is that proxy's peer IP, so clients may share a bucket; configure ingress deliberately rather than trusting public forwarding headers. Do not expose Auth directly as a way around deployment ingress controls.
 

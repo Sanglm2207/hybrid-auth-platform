@@ -18,9 +18,9 @@ Run `bash ./prepare-env.sh` before a manual launch, or use `./run-services.sh` /
 | `MAIL_SIGNATURE` | Managed footer, default `Hybrid Auth Security Team`; nonblank single line, max 160 characters |
 | `EMAIL_FROM` | Sender address, optionally `Team Name <sender@example.com>` |
 
-All eight bundled templates include the shared sender signature. It is a visible footer, not a DKIM/cryptographic signature; configure domain signing at the SMTP provider.
+All ten bundled templates include the shared sender signature. It is a visible footer, not a DKIM/cryptographic signature; configure domain signing at the SMTP provider.
 
-Mail has no PostgreSQL or Redis dependency. `/actuator/health` is available without a service key and reports application liveness; the SMTP health check is disabled, so it does not confirm SMTP credentials or provider availability. If the key is empty, internal API requests fail with HTTP 503. Missing or incorrect keys return HTTP 401 when a key is configured. Keep the service private; remote service-to-service deployment also needs a trusted network and TLS.
+Mail uses its own PostgreSQL `maildb` for idempotency receipts and has no Redis dependency. `/actuator/health` is available without a service key and reports application liveness; the SMTP health check is disabled, so it does not confirm SMTP credentials or provider availability. If the key is empty, internal API requests fail with HTTP 503. Missing or incorrect keys return HTTP 401 when a key is configured. Keep the service private; remote service-to-service deployment also needs a trusted network and TLS.
 
 ## Internal HTTP API
 
@@ -44,6 +44,8 @@ Template catalog:
 | `email-change-requested` | `newEmail` | Pending email change, current inbox |
 | `email-changed` | `newEmail` | Confirmed email change, old inbox |
 | `email-change-confirmed` | None | Confirmed email change, new inbox |
+| `account-deactivated` | None | Committed account deactivation |
+| `roles-changed` | None | Committed role assignment change |
 
 Export local settings into the current shell before using these examples:
 
@@ -83,7 +85,7 @@ The sender, subject pattern, and template resource paths belong to Mail configur
 
 ## Configure a new template
 
-Templates are version-controlled resources and configuration, loaded at Mail startup. There is no database or runtime CRUD endpoint for template editing.
+Templates are version-controlled resources and configuration, loaded at Mail startup. Templates have no database or runtime CRUD endpoint for editing; the database stores delivery receipts only.
 
 1. Add HTML and UTF-8 plain text files under `mail-service/src/main/resources/templates/email/`, for example `password-reset.html` and `password-reset.txt`.
 2. Include a `{{signature}}` footer in both HTML and text. Mail injects this reserved variable from `MAIL_SIGNATURE`; callers cannot override it. It is excluded from required caller variables. Use `{{variableName}}` placeholders for other content. Names start with a letter and contain letters, digits, or underscores, up to 64 characters. Variables are inferred from the subject, HTML, and text together. The renderer supports substitution only: no expressions, loops, includes, or executable code.
@@ -121,6 +123,4 @@ Mail builds a UTF-8 multipart message with both HTML and text alternatives. `MAI
 
 Auth's `MailServiceClient` propagates the request ID, uses a two-second connection timeout and a 20-second read timeout, and requires a successful `MAIL_SENT` acknowledgement. It does not retry automatically. A missing Auth-side service key returns `EMAIL_NOT_CONFIGURED`; remote errors, timeouts, or invalid acknowledgements become `EMAIL_DELIVERY_FAILED` (HTTP 503), without exposing Mail's response body. Registration rolls back; failed resend preserves the previous OTP and cooldown state.
 
-Mail delivery is synchronous. Auth dispatches forgot-password work through a bounded in-memory queue and handles committed account-change notices separately; see [P1 account lifecycle](ACCOUNT_LIFECYCLE_P1.md). Mail itself has no queue, outbox, automatic retry, delivery history database, or bounce/webhook processing. SMTP and Auth's database transaction cannot commit atomically: a timeout or database commit failure after SMTP acceptance can leave an email sent without a usable OTP. A durable outbox and idempotent delivery would be a separate extension.
-
-Credentials, recipients, template variables, rendered content, and provider error messages are excluded from application log helpers. Failures record only a safe code, exception type, and trace ID. Logs are in `logs/mail-service.log` when using the terminal runner.
+Mail accepts synchronous internal submissions with an optional UUID `Idempotency-Key`. Auth supplies a stable ID from its durable encrypted outbox and retries failures. Successful matching submissions are skipped using SQL receipts; different content with the same ID returns 409. A provider acceptance/receipt-commit crash can still cause duplicates. SMTP acceptance does not prove inbox delivery. See [durable mail, database roles, failure drills and operations](HARDENING_RELIABILITY.md).
