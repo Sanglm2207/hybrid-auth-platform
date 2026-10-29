@@ -1,6 +1,7 @@
 package dev.kaidev.auth.config;
 
 import dev.kaidev.auth.security.*;
+import dev.kaidev.auth.identity.*;
 import dev.kaidev.common.api.ApiPaths;
 import dev.kaidev.common.servlet.security.ServletSecurityErrors;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,7 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 
 @Configuration
 @EnableScheduling
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 public class AuthConfig {
     @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(12); }
 
@@ -47,8 +49,10 @@ public class AuthConfig {
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, ServletSecurityErrors errors) throws Exception {
-        return http.csrf(c -> c.disable())
+    @org.springframework.core.annotation.Order(1)
+    SecurityFilterChain filterChain(HttpSecurity http, ServletSecurityErrors errors, IdentityValidationService identities, ObjectMapper mapper) throws Exception {
+        return http.addFilterAfter(new LocalIdentityFilter(identities, mapper), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
+                .csrf(c -> c.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))

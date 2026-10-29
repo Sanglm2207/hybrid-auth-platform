@@ -40,7 +40,7 @@ public class AccountLifecycleService {
     @Transactional
     public void forgotPassword(String email) {
         AppUser user = users.findByEmailForUpdate(EmailAddress.normalize(email)).orElse(null);
-        if (user == null) return;
+        if (user == null || !user.active) return;
         Instant now = Instant.now();
         if (user.passwordResetResendAt != null && now.isBefore(user.passwordResetResendAt)) return;
         String token = issue(user, Purpose.RESET_PASSWORD, null, now);
@@ -115,11 +115,12 @@ public class AccountLifecycleService {
         user.passwordResetResendAt = null; user.emailChangeResendAt = null;
         tokens.invalidateAll(user.id, Instant.now());
         // User row lock also serializes login/refresh, preventing old-credential issuance after this invalidation.
-        // Failure rolls the SQL mutation back. A later SQL commit failure may revoke extra sessions, which is safe.
+        // Failure rolls the SQL mutation back. Revocation and the credential mutation share the SQL transaction.
         sessions.revokeAll(user.id);
     }
 
     private void authenticate(AppUser user, String password) {
+        if (!user.active) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
         long locked = protection.lockedFor(user.email);
         if (locked > 0) throw new TemporaryLockException(locked);
         if (!passwords.matches(password, user.passwordHash)) {
@@ -144,7 +145,7 @@ public class AccountLifecycleService {
         AppUser user = users.findByIdForUpdate(userId).orElseThrow(AccountLifecycleService::invalidToken);
         // Load the entity only AFTER acquiring the user lock: don't reuse a pre-lock cached token snapshot.
         AccountActionToken token = tokens.findByTokenHash(hash).orElseThrow(AccountLifecycleService::invalidToken);
-        if (token.purpose != purpose || token.consumedAt != null || !Instant.now().isBefore(token.expiresAt)
+        if (!user.active || token.purpose != purpose || token.consumedAt != null || !Instant.now().isBefore(token.expiresAt)
                 || token.credentialRevision != user.credentialRevision) throw invalidToken();
         return new Resolved(user, token);
     }

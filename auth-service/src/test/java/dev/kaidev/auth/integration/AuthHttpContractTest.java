@@ -43,6 +43,11 @@ class AuthHttpContractTest {
     @Autowired dev.kaidev.auth.security.JwtKeyRing signingKeys;
     @MockitoBean MailServiceClient mail;
     @MockitoBean SessionService sessions;
+    @MockitoBean dev.kaidev.auth.identity.IdentityValidationService identities;
+
+    @BeforeEach void identityAccess() {
+        when(identities.check(any())).thenReturn(new dev.kaidev.common.security.IdentityAccess(true, java.util.Set.of("USER"), dev.kaidev.auth.identity.Permissions.ALL));
+    }
     @MockitoBean dev.kaidev.auth.security.AbuseProtection protection;
     private static Path directory;
 
@@ -172,7 +177,7 @@ class AuthHttpContractTest {
         java.util.UUID actor = java.util.UUID.randomUUID();
         var now = java.time.Instant.now();
         var claims = org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
-                .issuer("http://localhost:8701").subject(actor.toString()).audience(java.util.List.of("hybrid-api"))
+                .issuer("http://localhost:8701").subject(actor.toString()).claim("sid", java.util.UUID.randomUUID().toString()).claim("cv", 0L).claim("sv", 0L).audience(java.util.List.of("hybrid-api"))
                 .issuedAt(now).expiresAt(now.plusSeconds(900)).build();
         String token = signingKeys.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(claims)).getTokenValue();
         mvc.perform(post("/api/v1/auth/logout-all").header("Authorization", "Bearer " + token))

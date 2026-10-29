@@ -42,7 +42,7 @@ public class EmailVerificationService {
     @Transactional
     public void resend(String email) {
         AppUser user = users.findByEmailForUpdate(normalize(email)).orElse(null);
-        if (user == null || user.emailVerified)
+        if (user == null || !user.active || user.emailVerified)
             return;
         if (user.emailOtpResendAt != null && Instant.now().isBefore(user.emailOtpResendAt))
             throw new ApiException(AuthCode.OTP_COOLDOWN);
@@ -54,7 +54,7 @@ public class EmailVerificationService {
     public void verify(String email, String otp) {
         AppUser user = users.findByEmailForUpdate(normalize(email))
                 .orElseThrow(() -> invalidOtp());
-        if (user.emailVerified || user.emailOtpHash == null || user.emailOtpExpiresAt == null
+        if (!user.active || user.emailVerified || user.emailOtpHash == null || user.emailOtpExpiresAt == null
                 || !Instant.now().isBefore(user.emailOtpExpiresAt))
             throw invalidOtp();
         if (user.emailOtpAttempts >= 5)

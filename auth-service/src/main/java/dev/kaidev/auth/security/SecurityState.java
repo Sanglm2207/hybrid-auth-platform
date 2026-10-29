@@ -31,6 +31,14 @@ public class SecurityState {
         catch (DataAccessException e) { throw unavailable(); }
     }
 
+    public java.util.Set<String> sessionIds(String key) {
+        try {
+            var result = redis.opsForZSet().rangeByScore(key, System.currentTimeMillis(), Double.POSITIVE_INFINITY, 0, 100);
+            if (result == null) throw unavailable();
+            return result;
+        } catch (DataAccessException e) { throw unavailable(); }
+    }
+
     public long increment(String key) {
         try {
             Long value = redis.opsForValue().increment(key);

@@ -13,13 +13,21 @@ public class AppUser {
     public String email;
     @Column(nullable = false)
     public String passwordHash;
+    @Column(name = "role", nullable = false)
+    private String legacyRole = "USER";
+    @ElementCollection
+    @CollectionTable(name = "identity_user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role_name", nullable = false, length = 32)
+    public java.util.Set<String> roles = new java.util.HashSet<>(java.util.Set.of("USER"));
     @Column(nullable = false)
-    public String role = "USER";
+    public boolean active = true;
+    public Instant deactivatedAt;
 
     @Column(nullable = false)
     public boolean emailVerified;
     @Column(nullable = false)
     public long credentialRevision;
+    @Column(nullable = false) public long sessionGeneration;
     public Instant passwordResetResendAt;
     public Instant emailChangeResendAt;
     public String emailOtpHash;

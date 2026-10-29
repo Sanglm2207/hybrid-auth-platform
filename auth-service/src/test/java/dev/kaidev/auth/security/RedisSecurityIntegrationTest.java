@@ -180,6 +180,37 @@ class RedisSecurityIntegrationTest {
         assertThat(keys).doesNotContain(original, next, user.email);
     }
 
+    @Test void listAndRevokeSessionEnforceOwnershipAndInvalidateAccessStateImmediately() {
+        String one = first.issue(user).refreshToken(), two = first.issue(user).refreshToken();
+        var listed = first.list(user.id, null); assertThat(listed).hasSize(2);
+        var target = listed.getFirst();
+        assertThat(first.active(user.id, target.id(), 0)).isTrue();
+        assertThat(first.active(UUID.randomUUID(), target.id(), 0)).isFalse();
+        assertThatThrownBy(() -> first.revokeSession(UUID.randomUUID(), target.id())).isInstanceOf(ApiException.class);
+        assertThat(first.active(user.id, target.id(), 0)).isTrue();
+        second.revokeSession(user.id, target.id());
+        assertThat(first.active(user.id, target.id(), 0)).isFalse();
+        assertThat(first.list(user.id, null)).hasSize(1);
+        int rejected = 0;
+        for (String token : List.of(one, two)) {
+            try { first.rotate(token, users); } catch (ApiException e) { rejected++; }
+        }
+        assertThat(rejected).isEqualTo(1);
+        first.revokeAll(user.id); assertThat(first.list(user.id, null)).isEmpty();
+    }
+
+    @Test void credentialRevisionPreventsOldRefreshFromReceivingNewRoles() {
+        String old = first.issue(user).refreshToken(); user.credentialRevision++;
+        assertInvalid(() -> second.rotate(old, users));
+    }
+
+    @Test void deactivatedUserCannotIssueOrRefresh() {
+        String old = first.issue(user).refreshToken(); user.active = false;
+        assertInvalid(() -> second.rotate(old, users));
+        assertThatThrownBy(() -> first.issue(user)).isInstanceOfSatisfying(ApiException.class,
+                e -> assertThat(e.apiCode().name()).isEqualTo("ACCOUNT_DISABLED"));
+    }
+
     private static void assertInvalid(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
         assertThatThrownBy(callable).isInstanceOfSatisfying(ApiException.class,
                 e -> assertThat(e.apiCode().name()).isEqualTo("INVALID_REFRESH_TOKEN"));

@@ -43,6 +43,7 @@ public class LoginService {
         // Recheck atomically after BCrypt so a concurrent lock cannot be bypassed by an in-flight success.
         long concurrentLock = protection.succeeded(email);
         if (concurrentLock > 0) throw locked(actor, concurrentLock);
+        if (!user.active) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
         if (!user.emailVerified) {
             audit(SecurityAudit.Event.LOGIN, SecurityAudit.Outcome.DENIED, actor);
             throw new ApiException(AuthCode.EMAIL_NOT_VERIFIED);

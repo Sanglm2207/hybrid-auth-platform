@@ -37,6 +37,7 @@ class AccountLifecycleServiceTest {
     @Autowired UserRepository users;
     @Autowired AccountActionTokenRepository tokens;
     @Autowired PasswordEncoder passwords;
+    @MockitoBean dev.kaidev.auth.hardening.AuthAuditStore auditStore;
     @MockitoBean MailServiceClient mail;
     @MockitoBean SessionService sessions;
     @MockitoBean AbuseProtection protection;
@@ -133,12 +134,12 @@ class AccountLifecycleServiceTest {
         assertThat(tokens.count()).isEqualTo(1);
         service.resetPassword(first, NEXT);
     }
-    @Test void notificationFailureCannotUndoACommittedPasswordReset() {
+    @Test void enqueueFailureRollsBackPasswordReset() {
         String raw = resetToken();
         doThrow(new ApiException(AuthCode.EMAIL_DELIVERY_FAILED)).when(mail).send(anyString(), eq("password-changed"), anyMap());
-        service.resetPassword(raw, NEXT);
-        assertThat(passwords.matches(NEXT, fresh().passwordHash)).isTrue();
-        code("INVALID_ACCOUNT_TOKEN", () -> service.resetPassword(raw, "OtherPassword789!"));
+        code("EMAIL_DELIVERY_FAILED", () -> service.resetPassword(raw, NEXT));
+        assertThat(passwords.matches(CURRENT, fresh().passwordHash)).isTrue();
+        assertThat(tokens.findByTokenHash(ClientIdentity.hash(raw)).orElseThrow().consumedAt).isNull();
     }
     @Test void unavailableRevocationRollsBackPasswordAndTokenConsumption() {
         String raw = resetToken();

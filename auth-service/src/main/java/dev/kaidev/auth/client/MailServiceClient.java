@@ -16,21 +16,29 @@ import org.springframework.web.client.*;
 
 @Component
 public class MailServiceClient {
+    private final dev.kaidev.auth.outbox.AuthOutbox outbox;
     private final RestClient client;
     private final String apiKey;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public MailServiceClient(@Qualifier("mailRestClient") RestClient client,
-            @Value("${app.mail-service.api-key}") String apiKey) {
+            @Value("${app.mail-service.api-key}") String apiKey, dev.kaidev.auth.outbox.AuthOutbox outbox) {
+        this.outbox = outbox;
         this.client = client;
         this.apiKey = apiKey;
     }
 
+    public MailServiceClient(RestClient client,String apiKey){this(client,apiKey,null);}
     public void send(String to, String templateId, Map<String, String> variables) {
+        if(outbox!=null){outbox.mail(to,templateId,variables);return;}
+        deliver(to,templateId,variables,java.util.UUID.randomUUID());
+    }
+    public void deliver(String to,String templateId,Map<String,String> variables,java.util.UUID deliveryId){
         if (apiKey.isBlank()) throw new ApiException(AuthCode.EMAIL_NOT_CONFIGURED);
         try {
             var response = client.post().uri(ApiPaths.MAIL_V1 + "/send")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .header("X-Mail-Service-Key", apiKey)
+                    .header("X-Mail-Service-Key", apiKey).header("Idempotency-Key",deliveryId.toString())
                     .headers(headers -> {
                         String traceId = MDC.get("traceId");
                         if (traceId != null) headers.set(RequestTrace.HEADER, traceId);

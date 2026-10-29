@@ -23,7 +23,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
         // Cover encoded aliases and unknown POST paths as well as normal controller mappings.
-        return !request.getMethod().equals("POST");
+        return !request.getMethod().equals("POST") || request.getRequestURI().startsWith(request.getContextPath() + "/internal/");
     }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain chain) throws ServletException, IOException {
@@ -31,12 +31,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         String path = request.getRequestURI().substring(request.getContextPath().length());
         try { path = org.springframework.web.util.UriUtils.decode(path, java.nio.charset.StandardCharsets.UTF_8); }
         catch (IllegalArgumentException ignored) { path = "/invalid"; }
-        if (Collections.list(request.getHeaders(ClientIdentity.IP)).size() == 1
-                && Collections.list(request.getHeaders(ClientIdentity.TIME)).size() == 1
-                && Collections.list(request.getHeaders(ClientIdentity.SIGNATURE)).size() == 1
-                && ClientIdentity.verify(proxyKey, request.getHeader(ClientIdentity.IP), request.getHeader(ClientIdentity.TIME),
-                        request.getHeader(ClientIdentity.SIGNATURE), request.getMethod(), request.getRequestURI()))
-            ip = request.getHeader(ClientIdentity.IP);
+        ip = dev.kaidev.common.servlet.support.VerifiedClientAddress.resolve(request, proxyKey);
         try {
             long retry = protection.rateLimit(ip == null ? "unknown" : ip, path.equals(ApiPaths.AUTH_V1 + "/login"));
             if (retry > 0) {

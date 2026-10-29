@@ -45,9 +45,14 @@ class AccountLifecycleHttpTest {
     @Autowired AccountActionTokenRepository tokens;
     @Autowired PasswordEncoder passwords;
     @Autowired JwtKeyRing keys;
-    @Autowired @Qualifier("passwordRecoveryExecutor") ThreadPoolTaskExecutor executor;
+    @Autowired dev.kaidev.auth.outbox.OutboxWorker worker;
     @MockitoBean MailServiceClient mail;
     @MockitoBean SessionService sessions;
+    @MockitoBean dev.kaidev.auth.identity.IdentityValidationService identities;
+
+    @BeforeEach void identityAccess() {
+        when(identities.check(any())).thenReturn(new dev.kaidev.common.security.IdentityAccess(true, java.util.Set.of("USER"), dev.kaidev.auth.identity.Permissions.ALL));
+    }
     @MockitoBean AbuseProtection protection;
     private static Path directory;
     private AppUser user;
@@ -69,11 +74,11 @@ class AccountLifecycleHttpTest {
     @AfterEach void cleanup() throws Exception {
         drain(); tokens.deleteAll(); users.deleteAll();
     }
-    private void drain() throws Exception { executor.submit(() -> {}).get(10, TimeUnit.SECONDS); }
+    private void drain() throws Exception { while (worker.processNext()) {} }
     private String jwt() {
         Instant now = Instant.now();
         return keys.encode(JwtEncoderParameters.from(JwtClaimsSet.builder().issuer("http://localhost:8701")
-                .subject(user.id.toString()).audience(List.of("hybrid-api")).issuedAt(now).expiresAt(now.plusSeconds(900)).build())).getTokenValue();
+                .subject(user.id.toString()).claim("sid", UUID.randomUUID().toString()).claim("cv", 0L).claim("sv", 0L).audience(List.of("hybrid-api")).issuedAt(now).expiresAt(now.plusSeconds(900)).build())).getTokenValue();
     }
     private String token(String template, String variable) {
         return mockingDetails(mail).getInvocations().stream().filter(i -> template.equals(i.getArgument(1))).reduce((a,b) -> b)

@@ -3,12 +3,16 @@ server:
   address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8701
 spring:
+  flyway:
+    user: ${AUTH_MIGRATION_USERNAME:auth_migrator}
+    password: ${AUTH_MIGRATION_PASSWORD:authmigrdev}
+    locations: classpath:db/migration,classpath:db/callback
   application:
     name: auth-service
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/authdb}
-    username: ${DB_USERNAME:auth}
-    password: ${DB_PASSWORD:authdev}
+    username: ${AUTH_DB_USERNAME:auth_app}
+    password: ${AUTH_APP_PASSWORD:authappdev}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -25,6 +29,11 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER:http://localhost:8701}
 app:
+  outbox:
+    encryption-key: ${MAIL_OUTBOX_ENCRYPTION_KEY:}
+  identity:
+    url: ${IDENTITY_SERVICE_URL:http://127.0.0.1:8701}
+    api-key: ${IDENTITY_SERVICE_KEY:}
   auth-proxy-key: ${AUTH_PROXY_KEY:}
   jwt:
     key-set: ${JWT_KEY_SET:}

@@ -13,21 +13,21 @@ public class AccountMailNotifications {
     public record Notice(UUID userId, String to, String templateId, Map<String, String> variables) {
         @Override public String toString() { return "AccountNotice[REDACTED]"; }
     }
-    public record CommittedAudit(UUID userId, SecurityAudit.Event event) {}
+    public record CommittedAudit(UUID userId, SecurityAudit.Event event, Map<String,?> details) {
+        public CommittedAudit(UUID userId, SecurityAudit.Event event) { this(userId,event,Map.of("targetUserId",userId)); }
+    }
     private final MailServiceClient mail;
-    public AccountMailNotifications(MailServiceClient mail) { this.mail = mail; }
+    private final dev.kaidev.auth.hardening.AuthAuditStore store;
+    public AccountMailNotifications(MailServiceClient mail, dev.kaidev.auth.hardening.AuthAuditStore store) { this.mail = mail; this.store=store; }
+    @TransactionalEventListener(phase=org.springframework.transaction.event.TransactionPhase.BEFORE_COMMIT)
+    public void persist(CommittedAudit event) { store.append(event.userId(),event.event(),event.details()); }
 
-    @TransactionalEventListener
+    @TransactionalEventListener(phase=org.springframework.transaction.event.TransactionPhase.BEFORE_COMMIT)
     public void send(Notice notice) {
-        try { mail.send(notice.to(), notice.templateId(), notice.variables()); }
-        catch (RuntimeException e) {
-            // The account transaction has committed; notification delivery cannot undo it.
-            SecurityAudit.record(SecurityAudit.Event.ACCOUNT_MAIL_FAILURE, SecurityAudit.Outcome.FAILURE,
-                    notice.userId().toString(), MDC.get("traceId"));
-        }
+        mail.send(notice.to(),notice.templateId(),notice.variables());
     }
     @TransactionalEventListener
     public void audit(CommittedAudit event) {
-        SecurityAudit.record(event.event(), SecurityAudit.Outcome.SUCCESS, event.userId().toString(), MDC.get("traceId"));
+        SecurityAudit.record(event.event(), SecurityAudit.Outcome.SUCCESS, event.userId().toString(), MDC.get("traceId"),event.details());
     }
 }
