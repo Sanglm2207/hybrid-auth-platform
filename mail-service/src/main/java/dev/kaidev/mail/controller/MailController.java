@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(ApiPaths.MAIL_V1)
 public class MailController {
     private final MailTemplateService templates;
-    private final MailDeliveryService delivery;
+    private final dev.kaidev.mail.delivery.IdempotentMailDelivery delivery;
 
-    public MailController(MailTemplateService templates, MailDeliveryService delivery) {
+    public MailController(MailTemplateService templates, dev.kaidev.mail.delivery.IdempotentMailDelivery delivery) {
         this.templates = templates;
         this.delivery = delivery;
     }
@@ -31,8 +31,8 @@ public class MailController {
     }
 
     @PostMapping("/send")
-    public ApiResponse<Void> send(@Valid @RequestBody SendMailRequest request) {
-        delivery.send(request);
+    public ApiResponse<Void> send(@Valid @RequestBody SendMailRequest request, @RequestHeader(value="Idempotency-Key",required=false) java.util.UUID id) {
+        delivery.send(request,id==null?java.util.UUID.randomUUID():id);
         return ServletApi.success(MailCode.MAIL_SENT, null);
     }
 }

@@ -1,0 +1,7 @@
+Your account access has changed
+
+An administrator updated your account roles. Existing access and refresh sessions have been invalidated. Sign in again to use your current access permissions. If this change was unexpected, contact your account administrator.
+
+Best regards,
+{{signature}}
+Automated account security notification

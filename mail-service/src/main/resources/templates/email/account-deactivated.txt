@@ -1,0 +1,7 @@
+Your account has been deactivated
+
+Your account is now deactivated. Sign-in, refresh sessions, and protected API access have been disabled. Your profile is retained according to the account retention policy. If this was not you, contact your account administrator.
+
+Best regards,
+{{signature}}
+Automated account security notification

@@ -29,7 +29,8 @@ public class MailDeliveryService {
         this.host = host;
     }
 
-    public void send(SendMailRequest request) {
+    public void send(SendMailRequest request) { send(request,java.util.UUID.randomUUID()); }
+    public void send(SendMailRequest request, java.util.UUID id) {
         var rendered = templates.render(request.templateId(), request.variables());
         if (host.isBlank() || properties.from() == null || properties.from().isBlank())
             throw new ApiException(MailCode.MAIL_NOT_CONFIGURED);
@@ -40,6 +41,7 @@ public class MailDeliveryService {
             helper.setTo(request.to());
             helper.setSubject(rendered.subject());
             helper.setText(rendered.text(), rendered.html());
+            message.setHeader("Message-ID","<"+id+"@hybrid-auth.local>");
             sender.send(message);
             ApiLog.event(org.slf4j.LoggerFactory.getLogger(MailDeliveryService.class), "mail.sent", MailCode.MAIL_SENT.name());
         } catch (MailException | MessagingException e) {

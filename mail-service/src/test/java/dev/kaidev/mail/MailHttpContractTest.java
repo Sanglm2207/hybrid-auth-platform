@@ -59,7 +59,7 @@ class MailHttpContractTest {
         String json = mvc.perform(get("/api/v1/mail/templates").header(KEY, "test-mail-key"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var templates = mapper.readTree(json).path("data");
-        assertThat(templates.size()).isEqualTo(8);
+        assertThat(templates.size()).isEqualTo(10);
         for (var template : templates) {
             assertThat(template.path("variables").toString()).doesNotContain("signature");
             if (template.path("id").asText().equals("email-verification"))
@@ -96,6 +96,25 @@ class MailHttpContractTest {
         assertThat(body(message, "text/plain")).contains("123456", "5 minutes");
         assertThat(body(message, "text/html")).contains("<html", "123456", "Hybrid Auth Security Team");
         assertThat(body(message, "text/plain")).contains("Best regards", "Hybrid Auth Security Team");
+    }
+
+    @Test void retryUsesDurableReceiptAndMismatchedReuseIsRejected() throws Exception {
+        String id=java.util.UUID.randomUUID().toString();
+        for(int i=0;i<2;i++) mvc.perform(post(SEND).header(KEY,"test-mail-key").header("Idempotency-Key",id)
+                .contentType(MediaType.APPLICATION_JSON).content(REQUEST)).andExpect(status().isOk());
+        verify(sender,times(1)).send(any(MimeMessage.class));
+        mvc.perform(post(SEND).header(KEY,"test-mail-key").header("Idempotency-Key",id)
+                .contentType(MediaType.APPLICATION_JSON).content(REQUEST.replace("123456","654321"))).andExpect(status().isConflict());
+        verify(sender,times(1)).send(any(MimeMessage.class));
+    }
+    @Test void failedSmtpDoesNotMarkReceiptSentAndRetryCanDeliver() throws Exception {
+        String id=java.util.UUID.randomUUID().toString();
+        doThrow(new MailAuthenticationException("provider-secret")).doNothing().when(sender).send(any(MimeMessage.class));
+        mvc.perform(post(SEND).header(KEY,"test-mail-key").header("Idempotency-Key",id)
+                .contentType(MediaType.APPLICATION_JSON).content(REQUEST)).andExpect(status().isServiceUnavailable());
+        mvc.perform(post(SEND).header(KEY,"test-mail-key").header("Idempotency-Key",id)
+                .contentType(MediaType.APPLICATION_JSON).content(REQUEST)).andExpect(status().isOk());
+        verify(sender,times(2)).send(any(MimeMessage.class));
     }
 
     private static String body(Part part, String mimeType) throws Exception {
@@ -144,6 +163,8 @@ class MailHttpContractTest {
         Map<String, Map<String, String>> examples = Map.of(
                 "password-reset", Map.of("resetToken", "a".repeat(43), "expiresInMinutes", "15"),
                 "password-changed", Map.of(),
+                "account-deactivated", Map.of(),
+                "roles-changed", Map.of(),
                 "email-change-verification", Map.of("verificationToken", "b".repeat(43), "expiresInMinutes", "15"),
                 "email-change-requested", Map.of("newEmail", "new@example.com"),
                 "email-changed", Map.of("newEmail", "new@example.com"),

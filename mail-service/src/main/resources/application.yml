@@ -2,6 +2,18 @@ server:
   address: ${MAIL_BIND_ADDRESS:127.0.0.1}
   port: ${MAIL_SERVICE_PORT:8703}
 spring:
+  flyway:
+    user: ${MAIL_MIGRATION_USERNAME:mailer_migrator}
+    password: ${MAIL_MIGRATION_PASSWORD:mailmigrdev}
+    locations: classpath:db/migration,classpath:db/callback
+  datasource:
+    url: ${MAIL_DB_URL:jdbc:postgresql://127.0.0.1:5432/maildb}
+    username: ${MAIL_DB_USERNAME:mailer_app}
+    password: ${MAIL_APP_PASSWORD:mailappdev}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
   application:
     name: mail-service
   mail:
@@ -55,6 +67,14 @@ app:
         subject: "Your new email address is confirmed"
         html: classpath:templates/email/email-change-confirmed.html
         text: classpath:templates/email/email-change-confirmed.txt
+      account-deactivated:
+        subject: "Your account has been deactivated"
+        html: classpath:templates/email/account-deactivated.html
+        text: classpath:templates/email/account-deactivated.txt
+      roles-changed:
+        subject: "Your account access has changed"
+        html: classpath:templates/email/roles-changed.html
+        text: classpath:templates/email/roles-changed.txt
 management:
   health:
     mail:
