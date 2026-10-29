@@ -2,8 +2,12 @@ server:
   port: 8700
   forward-headers-strategy: none
 app:
+  identity:
+    url: ${IDENTITY_SERVICE_URL:http://127.0.0.1:8701}
+    api-key: ${IDENTITY_SERVICE_KEY:}
   auth-proxy-key: ${AUTH_PROXY_KEY:}
   gateway:
+    trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}
     allowed-hosts: ${GATEWAY_ALLOWED_HOSTS:localhost,127.0.0.1,[::1]}
     allowed-origins: ${GATEWAY_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
     require-origin: ${GATEWAY_REQUIRE_ORIGIN:false}

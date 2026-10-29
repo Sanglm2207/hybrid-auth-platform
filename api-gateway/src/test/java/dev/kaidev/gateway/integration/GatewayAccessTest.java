@@ -63,7 +63,7 @@ class GatewayAccessTest {
 
     @Test void rejectsUnapprovedPreflightMethodAndHeaderWithEnvelope() {
         client.options().uri("/api/v1/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
-                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "TRACE")
                 .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("CORS_REJECTED");
         client.options().uri("/api/v1/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")

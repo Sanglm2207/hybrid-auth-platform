@@ -19,19 +19,23 @@ import org.springframework.web.server.adapter.ForwardedHeaderTransformer;
 @EnableConfigurationProperties(GatewayAccessProperties.class)
 public class GatewaySecurity {
     @Bean
-    SecurityWebFilterChain chain(ServerHttpSecurity http, ReactiveSecurityErrors errors) {
-        return http.csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
+    SecurityWebFilterChain chain(ServerHttpSecurity http, ReactiveSecurityErrors errors,
+            com.fasterxml.jackson.databind.ObjectMapper mapper, @Value("${app.identity.url}") String identityUrl,
+            @Value("${app.identity.api-key:}") String identityKey) {
+        return http.addFilterBefore(new dev.kaidev.gateway.filter.GatewayIdentityFilter(identityUrl, identityKey, mapper),
+                org.springframework.security.config.web.server.SecurityWebFiltersOrder.AUTHORIZATION).csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
                 .pathMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
                         ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
-                .permitAll().anyExchange().authenticated()).oauth2ResourceServer(x -> x.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
+                .permitAll()
+                .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:read")
+                .pathMatchers(org.springframework.http.HttpMethod.PATCH, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:write")
+                .anyExchange().authenticated()).oauth2ResourceServer(x -> x.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
     }
 
     @Bean
-    ForwardedHeaderTransformer forwardedHeaderTransformer() {
-        ForwardedHeaderTransformer transformer = new ForwardedHeaderTransformer();
-        transformer.setRemoveOnly(true);
-        return transformer;
+    ForwardedHeaderTransformer forwardedHeaderTransformer(@Value("${app.gateway.trusted-proxies:}") String proxies) {
+        return new TrustedIngressTransformer(proxies);
     }
 
     @Bean

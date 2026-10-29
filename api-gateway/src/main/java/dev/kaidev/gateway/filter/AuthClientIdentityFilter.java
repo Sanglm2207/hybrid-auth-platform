@@ -29,9 +29,11 @@ public class AuthClientIdentityFilter implements WebFilter, Ordered {
         if (auth && (key.length() < 32 || request.getRemoteAddress() == null))
             return ReactiveApi.failure(exchange, mapper, CommonCode.SERVICE_UNAVAILABLE);
         var forwarded = request.mutate().headers(headers -> {
+            headers.remove(dev.kaidev.gateway.config.TrustedIngressTransformer.RESOLVED);
             headers.remove(ClientIdentity.IP); headers.remove(ClientIdentity.TIME); headers.remove(ClientIdentity.SIGNATURE);
             if (auth) {
-                String ip = request.getRemoteAddress().getAddress().getHostAddress();
+                String ip = request.getHeaders().getFirst(dev.kaidev.gateway.config.TrustedIngressTransformer.RESOLVED);
+                if(ip==null)ip=request.getRemoteAddress().getAddress().getHostAddress();
                 String time = Long.toString(Instant.now().getEpochSecond());
                 headers.set(ClientIdentity.IP, ip); headers.set(ClientIdentity.TIME, time);
                 headers.set(ClientIdentity.SIGNATURE, ClientIdentity.sign(key, ip, time,
