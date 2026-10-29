@@ -88,6 +88,26 @@
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "maven: install shared modules",
+      "type": "process",
+      "command": "mvn",
+      "args": [
+        "-B",
+        "-ntp",
+        "-DskipTests",
+        "-pl",
+        "api-common,api-servlet,api-reactive",
+        "-am",
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$javac"
+      ]
     }
   ]
 }
