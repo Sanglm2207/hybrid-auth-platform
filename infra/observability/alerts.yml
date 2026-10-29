@@ -1,0 +1,17 @@
+groups:
+  - name: hybrid-security
+    rules:
+      - alert: HybridSecurityIncident
+        expr: hybrid_security_alert == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Security audit threshold exceeded: {{ $labels.rule }}'
+      - alert: HybridAuditCollectorUnavailable
+        expr: up{job="hybrid-security-audit"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Security audit collector is unavailable'

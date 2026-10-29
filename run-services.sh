@@ -28,6 +28,7 @@ set -a
 source ./.env
 set +a
 docker compose up -d --wait postgres redis
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U auth -d authdb -f /docker-entrypoint-initdb.d/01-user-db.sql
 mvn -B -ntp verify
 mkdir -p logs
 
@@ -74,6 +75,22 @@ start_service mail-service "${MAIL_SERVICE_PORT:-8703}"
 start_service auth-service 8701
 start_service user-service 8702
 start_service api-gateway 8700
+if [[ "${AUDIT_COLLECTOR_ENABLED:-true}" == true ]]; then
+  collector_port=${AUDIT_COLLECTOR_PORT:-8710}
+  if (echo >"/dev/tcp/127.0.0.1/$collector_port") 2>/dev/null; then
+    echo "Audit collector port $collector_port is already in use." >&2; exit 1
+  fi
+  python3 scripts/audit-collector.py --port "$collector_port" >logs/audit-collector.log 2>&1 &
+  collector_pid=$!; pids+=("$collector_pid")
+  collector_ready=false
+  for ((attempt=0; attempt<20; attempt++)); do
+    kill -0 "$collector_pid" 2>/dev/null || { echo 'Audit collector failed; see logs/audit-collector.log' >&2; exit 1; }
+    if curl --fail --silent --max-time 1 "http://127.0.0.1:$collector_port/health" >/dev/null; then collector_ready=true; break; fi
+    sleep 1
+  done
+  [[ "$collector_ready" == true ]] || { echo 'Audit collector startup timed out' >&2; exit 1; }
+  echo "Audit collector ready at http://127.0.0.1:$collector_port/metrics"
+fi
 echo 'All services ready. Gateway: http://localhost:8700 — press Ctrl+C to stop.'
 while true; do
   for pid in "${pids[@]}"; do

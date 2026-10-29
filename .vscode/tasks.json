@@ -48,7 +48,8 @@
       "dependsOn": [
         "local: env",
         "local: keys",
-        "local: databases up"
+        "local: databases up",
+        "local: profile database"
       ],
       "problemMatcher": []
     },
@@ -106,6 +107,30 @@
       "problemMatcher": [
         "$javac"
       ]
+    },
+    {
+      "label": "local: profile database",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-U",
+        "auth",
+        "-d",
+        "authdb",
+        "-f",
+        "/docker-entrypoint-initdb.d/01-user-db.sql"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
     }
   ]
 }

@@ -22,7 +22,6 @@
       "console": "integratedTerminal",
       "env": {
         "DB_URL": "jdbc:postgresql://127.0.0.1:5432/authdb",
-        "DB_USERNAME": "auth",
         "REDIS_HOST": "127.0.0.1",
         "REDIS_PORT": "6379",
         "JWT_ISSUER": "http://localhost:8701",
@@ -44,7 +43,8 @@
         "JWT_ISSUER": "http://localhost:8701",
         "JWKS_URI": "http://localhost:8701/.well-known/jwks.json"
       },
-      "vmArgs": "--enable-native-access=ALL-UNNAMED"
+      "vmArgs": "--enable-native-access=ALL-UNNAMED",
+      "envFile": "${workspaceFolder}/.env"
     },
     {
       "type": "java",

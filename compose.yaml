@@ -7,8 +7,15 @@ services:
       POSTGRES_DB: authdb
       POSTGRES_USER: auth
       POSTGRES_PASSWORD: ${DB_PASSWORD:-authdev}
+      PROFILE_DB_PASSWORD: ${PROFILE_DB_PASSWORD:-profiledev}
+      AUTH_APP_PASSWORD: ${AUTH_APP_PASSWORD:-authappdev}
+      AUTH_MIGRATION_PASSWORD: ${AUTH_MIGRATION_PASSWORD:-authmigrdev}
+      PROFILE_APP_PASSWORD: ${PROFILE_APP_PASSWORD:-profileappdev}
+      MAIL_APP_PASSWORD: ${MAIL_APP_PASSWORD:-mailappdev}
+      MAIL_MIGRATION_PASSWORD: ${MAIL_MIGRATION_PASSWORD:-mailmigrdev}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init-user-db.sql:/docker-entrypoint-initdb.d/01-user-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U auth -d authdb"]
       interval: 5s
@@ -17,7 +24,7 @@ services:
     image: redis:7.4-alpine
     ports:
       - "127.0.0.1:6379:6379"
-    command: ["redis-server","--appendonly","yes"]
+    command: ["redis-server","--appendonly","yes","--appendfsync","always","--maxmemory-policy","noeviction"]
     volumes:
       - redisdata:/data
     healthcheck:
