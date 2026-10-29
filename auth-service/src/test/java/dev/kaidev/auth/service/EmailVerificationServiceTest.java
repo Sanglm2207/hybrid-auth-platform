@@ -1,4 +1,7 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.service;
+
+import dev.kaidev.auth.entity.AppUser;
+import dev.kaidev.auth.repository.UserRepository;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

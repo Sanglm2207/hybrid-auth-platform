@@ -1,4 +1,10 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.controller;
+
+import dev.kaidev.auth.dto.request.LoginRequest;
+import dev.kaidev.auth.entity.AppUser;
+import dev.kaidev.auth.repository.UserRepository;
+import dev.kaidev.auth.service.EmailVerificationService;
+import dev.kaidev.auth.service.SessionService;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -20,7 +26,7 @@ class AuthControllerTest {
         AppUser user = new AppUser("test@example.com", "hash");
         when(users.findByEmail(user.email)).thenReturn(Optional.of(user));
         when(passwords.matches("StrongPassword123!", "hash")).thenReturn(true);
-        assertThatThrownBy(() -> controller.login(new AuthController.Credentials(user.email, "StrongPassword123!")))
+        assertThatThrownBy(() -> controller.login(new LoginRequest(user.email, "StrongPassword123!")))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         error -> assertThat(error.getStatusCode().value()).isEqualTo(403));
         verifyNoInteractions(sessions);
@@ -32,7 +38,7 @@ class AuthControllerTest {
         user.emailVerified = true;
         when(users.findByEmail(user.email)).thenReturn(Optional.of(user));
         when(passwords.matches("StrongPassword123!", "hash")).thenReturn(true);
-        controller.login(new AuthController.Credentials(user.email, "StrongPassword123!"));
+        controller.login(new LoginRequest(user.email, "StrongPassword123!"));
         verify(sessions).issue(user);
     }
 }

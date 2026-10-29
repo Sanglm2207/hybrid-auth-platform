@@ -1,4 +1,6 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.repository;
+
+import dev.kaidev.auth.entity.AppUser;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.*;

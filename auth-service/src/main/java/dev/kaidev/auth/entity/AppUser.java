@@ -1,4 +1,4 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.entity;
 
 import jakarta.persistence.*;
 import java.util.UUID;

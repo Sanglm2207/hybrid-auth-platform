@@ -1,17 +1,22 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.service;
+
+import dev.kaidev.auth.constant.AuthCode;
+import dev.kaidev.auth.entity.AppUser;
+import dev.kaidev.auth.repository.UserRepository;
+import dev.kaidev.common.exception.ApiException;
+import dev.kaidev.common.logging.ApiLog;
+import dev.kaidev.common.util.EmailAddress;
 
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Locale;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class EmailVerificationService {
@@ -35,7 +40,7 @@ public class EmailVerificationService {
     public AppUser register(String email, String password) {
         email = normalize(email);
         if (users.findByEmail(email).isPresent())
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
+            throw new ApiException(AuthCode.EMAIL_EXISTS);
         AppUser user = users.saveAndFlush(new AppUser(email, passwords.encode(password)));
         send(user);
         return user;
@@ -47,12 +52,12 @@ public class EmailVerificationService {
         if (user == null || user.emailVerified)
             return;
         if (user.emailOtpResendAt != null && Instant.now().isBefore(user.emailOtpResendAt))
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Wait 60 seconds before requesting another OTP");
+            throw new ApiException(AuthCode.OTP_COOLDOWN);
         send(user);
     }
 
     // Failed attempts must commit, otherwise callers could retry indefinitely.
-    @Transactional(noRollbackFor = ResponseStatusException.class)
+    @Transactional(noRollbackFor = ApiException.class)
     public void verify(String email, String otp) {
         AppUser user = users.findByEmailForUpdate(normalize(email))
                 .orElseThrow(() -> invalidOtp());
@@ -60,7 +65,7 @@ public class EmailVerificationService {
                 || !Instant.now().isBefore(user.emailOtpExpiresAt))
             throw invalidOtp();
         if (user.emailOtpAttempts >= 5)
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many attempts. Request another OTP");
+            throw new ApiException(AuthCode.OTP_ATTEMPTS_EXCEEDED);
         user.emailOtpAttempts++;
         if (!passwords.matches(otp, user.emailOtpHash))
             throw invalidOtp();
@@ -73,7 +78,7 @@ public class EmailVerificationService {
 
     private void send(AppUser user) {
         if (host.isBlank() || from.isBlank())
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery is not configured");
+            throw new ApiException(AuthCode.EMAIL_NOT_CONFIGURED);
         String otp = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
         Instant now = Instant.now();
         user.emailOtpHash = passwords.encode(otp);
@@ -88,18 +93,18 @@ public class EmailVerificationService {
                 + "\nThis code expires in 5 minutes. If you did not request it, ignore this email.");
         try {
             mail.send(message);
-            System.out.println("Sent verification email to " + user.email + " with OTP: " + otp);
+            ApiLog.event(org.slf4j.LoggerFactory.getLogger(EmailVerificationService.class), "email.verification.sent", "OTP_SENT");
         } catch (MailException e) {
             // Never expose SMTP credentials, provider responses, or the OTP to the client.
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to send verification email");
+            throw new ApiException(AuthCode.EMAIL_DELIVERY_FAILED);
         }
     }
 
     private static String normalize(String email) {
-        return email.trim().toLowerCase(Locale.ROOT);
+        return EmailAddress.normalize(email);
     }
 
-    private static ResponseStatusException invalidOtp() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired OTP");
+    private static ApiException invalidOtp() {
+        return new ApiException(AuthCode.INVALID_OTP);
     }
 }

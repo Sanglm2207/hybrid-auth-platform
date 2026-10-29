@@ -1,4 +1,10 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.service;
+
+import dev.kaidev.auth.constant.AuthCode;
+import dev.kaidev.auth.dto.response.TokenResponse;
+import dev.kaidev.auth.entity.AppUser;
+import dev.kaidev.auth.repository.UserRepository;
+import dev.kaidev.common.exception.ApiException;
 
 import java.time.*;
 import java.nio.charset.StandardCharsets;
@@ -9,8 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class SessionService {
@@ -25,16 +29,13 @@ public class SessionService {
         this.issuer = issuer;
     }
 
-    record Issued(String accessToken, String refreshToken, String tokenType, long expiresIn) {
-    }
-
-    public Issued issue(AppUser user) {
+    public TokenResponse issue(AppUser user) {
         return issue(user, UUID.randomUUID().toString());
     }
 
-    private Issued issue(AppUser user, String family) {
+    private TokenResponse issue(AppUser user, String family) {
         if (!user.emailVerified)
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Verify your email before logging in");
+            throw new ApiException(AuthCode.EMAIL_NOT_VERIFIED);
         Instant now = Instant.now();
         String refresh = newRefresh();
         String hash = sha256(refresh);
@@ -48,20 +49,20 @@ public class SessionService {
         String access = encoder.encode(
                 JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.RS256).keyId("local-1").build(), claims))
                 .getTokenValue();
-        return new Issued(access, refresh, "Bearer", 900);
+        return new TokenResponse(access, refresh, "Bearer", 900);
     }
 
-    public synchronized Issued rotate(String token, UserRepository users) {
+    public synchronized TokenResponse rotate(String token, UserRepository users) {
         String hash = sha256(token);
         String key = "refresh:" + hash;
         String value = redis.opsForValue().getAndDelete(key);
         if (value == null)
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or reused refresh token");
+            throw new ApiException(AuthCode.INVALID_REFRESH_TOKEN);
         String[] parts = value.split("\\|");
         String family = parts[2];
         redis.opsForSet().remove("family:" + family, hash);
         AppUser user = users.findById(UUID.fromString(parts[0]))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+                .orElseThrow(() -> new ApiException(AuthCode.INVALID_REFRESH_TOKEN));
         return issue(user, family);
     }
 

@@ -1,4 +1,6 @@
-package dev.kaidev.auth;
+package dev.kaidev.auth.config;
+
+import dev.kaidev.common.servlet.security.ServletSecurityErrors;
 
 import java.security.KeyFactory;
 import java.security.interfaces.RSAPrivateKey;
@@ -11,6 +13,7 @@ import com.nimbusds.jose.jwk.source.*;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -59,11 +62,14 @@ public class AuthConfig {
   }
 
   @Bean
-  SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  SecurityFilterChain filterChain(HttpSecurity http, ServletSecurityErrors errors) throws Exception {
     return http.csrf(c -> c.disable())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .requestCache(c -> c.disable())
+                .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
         .authorizeHttpRequests(a -> a.requestMatchers("/auth/register", "/auth/verify-email", "/auth/resend-otp", "/auth/login", "/auth/refresh", "/auth/logout",
-            "/.well-known/jwks.json", "/actuator/health").permitAll().anyRequest().authenticated())
-        .oauth2ResourceServer(o -> o.jwt(j -> {
+            "/.well-known/jwks.json", "/actuator/health", "/error").permitAll().anyRequest().authenticated())
+        .oauth2ResourceServer(o -> o.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
         })).build();
   }
 }
