@@ -1,7 +1,25 @@
 server:
   address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8702
+spring:
+  flyway:
+    user: ${PROFILE_MIGRATION_USERNAME:profiles}
+    password: ${PROFILE_DB_PASSWORD:profiledev}
+    locations: classpath:db/migration,classpath:db/callback
+  application:
+    name: user-service
+  datasource:
+    url: ${USER_DB_URL:jdbc:postgresql://127.0.0.1:5432/userdb}
+    username: ${USER_DB_USERNAME:profiles_app}
+    password: ${PROFILE_APP_PASSWORD:profileappdev}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
 app:
+  identity:
+    url: ${IDENTITY_SERVICE_URL:http://127.0.0.1:8701}
+    api-key: ${IDENTITY_SERVICE_KEY:}
   issuer: ${JWT_ISSUER:http://localhost:8701}
   jwks-uri: ${JWKS_URI:http://localhost:8701/.well-known/jwks.json}
 management:

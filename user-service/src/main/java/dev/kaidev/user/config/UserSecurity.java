@@ -14,13 +14,18 @@ import java.util.List;
 @Configuration
 public class UserSecurity {
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, ServletSecurityErrors errors) throws Exception {
-        return http.csrf(c -> c.disable())
+    SecurityFilterChain chain(HttpSecurity http, ServletSecurityErrors errors, dev.kaidev.user.security.UserIdentityClient identities,
+            com.fasterxml.jackson.databind.ObjectMapper mapper) throws Exception {
+        return http.addFilterAfter(new dev.kaidev.user.security.UserIdentityFilter(identities, mapper),
+                org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class).csrf(c -> c.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .authorizeHttpRequests(
-                        a -> a.requestMatchers("/actuator/health", "/error").permitAll().anyRequest().authenticated())
+                        a -> a.requestMatchers("/actuator/health", "/error").permitAll()
+                            .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/users/me").hasAuthority("profile:read")
+                            .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/users/me").hasAuthority("profile:write")
+                            .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
     }
