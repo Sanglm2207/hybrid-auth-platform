@@ -56,23 +56,24 @@ EMAIL_FROM=""
 ```
 `SMTP_SECURE=false` uses STARTTLS (normally port 587); `true` uses implicit TLS (normally port 465). `EMAIL_FROM` accepts `Team Name <sender@example.com>`. Restart the services after editing `.env`. The shell runner loads these keys; the VS Code Auth launch also reads `.env`. Direct Maven/Java launches need these variables exported.
 
-Registration sends a six-digit email OTP and returns `emailVerified: false`, without tokens. Login and refresh require a verified email. Existing accounts must request an OTP with `/auth/resend-otp` before logging in again; previously issued access tokens remain valid until expiry. OTPs expire after five minutes, allow five attempts, and are stored as hashes. Resending requires a 60-second wait and replaces the previous code. Missing SMTP configuration or mail delivery failure returns HTTP 503; failed registration is rolled back so it can be retried.
+Registration sends a six-digit email OTP and returns `emailVerified: false`, without tokens. Login and refresh require a verified email. Existing accounts must request an OTP with `/api/v1/auth/resend-otp` before logging in again; previously issued access tokens remain valid until expiry. OTPs expire after five minutes, allow five attempts, and are stored as hashes. Resending requires a 60-second wait and replaces the previous code. Missing SMTP configuration or mail delivery failure returns HTTP 503; failed registration is rolled back so it can be retried.
 
 ## Functional test
+Business APIs use the `/api/v1` prefix. See [API versions](docs/API.md#api-versions) for adding future versions.
 Registration passwords must contain at least 12 characters and at most 72 UTF-8 bytes. Validation errors return HTTP 400 with field messages in the `errors` array; all business responses use the shared [API contract](docs/API.md).
 ```bash
-curl -i -X POST http://localhost:8700/auth/register -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
+curl -i -X POST http://localhost:8700/api/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
 # Read the OTP from your email and verify before logging in:
-curl -i -X POST http://localhost:8700/auth/verify-email -H 'Content-Type: application/json' -d '{"email":"test@example.com","otp":"123456"}'
+curl -i -X POST http://localhost:8700/api/v1/auth/verify-email -H 'Content-Type: application/json' -d '{"email":"test@example.com","otp":"123456"}'
 # Optional: request a new code after 60 seconds:
-# curl -i -X POST http://localhost:8700/auth/resend-otp -H 'Content-Type: application/json' -d '{"email":"test@example.com"}'
-curl -s -X POST http://localhost:8700/auth/login -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
+# curl -i -X POST http://localhost:8700/api/v1/auth/resend-otp -H 'Content-Type: application/json' -d '{"email":"test@example.com"}'
+curl -s -X POST http://localhost:8700/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"StrongPassword123!"}'
 ```
 Copy `data.accessToken` from the login JSON, then call:
 ```bash
-curl http://localhost:8700/users/me -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+curl http://localhost:8700/api/v1/users/me -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
 ```
-Refresh via `POST /auth/refresh` with `{"refreshToken":"..."}`; call `POST /auth/logout` with the *current* refresh token. Login / refresh responses return tokens in JSON for API debugging; do not store these in localStorage in a browser app.
+Refresh via `POST /api/v1/auth/refresh` with `{"refreshToken":"..."}`; call `POST /api/v1/auth/logout` with the *current* refresh token. Login / refresh responses return tokens in JSON for API debugging; do not store these in localStorage in a browser app.
 
 ## Scope / security limitations
 - Lab returns refresh tokens in JSON. For production browser deployment implement a BFF or HttpOnly Secure SameSite cookie, CSRF protection for cookie authentication, and a tested reverse proxy/TLS termination.

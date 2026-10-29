@@ -1,5 +1,6 @@
 package dev.kaidev.auth.config;
 
+import dev.kaidev.common.api.ApiPaths;
 import dev.kaidev.common.servlet.security.ServletSecurityErrors;
 
 import java.security.KeyFactory;
@@ -67,7 +68,7 @@ public class AuthConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
-        .authorizeHttpRequests(a -> a.requestMatchers("/auth/register", "/auth/verify-email", "/auth/resend-otp", "/auth/login", "/auth/refresh", "/auth/logout",
+        .authorizeHttpRequests(a -> a.requestMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout",
             "/.well-known/jwks.json", "/actuator/health", "/error").permitAll().anyRequest().authenticated())
         .oauth2ResourceServer(o -> o.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
         })).build();

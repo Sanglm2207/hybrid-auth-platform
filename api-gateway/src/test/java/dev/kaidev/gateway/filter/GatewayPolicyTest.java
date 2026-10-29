@@ -20,7 +20,7 @@ class GatewayPolicyTest {
     }
 
     @Test void strictOriginBlocksApiCallsWithoutOrigin() {
-        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("http://localhost/auth/login").header("Host", "localhost"));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.post("http://localhost/api/v1/auth/login").header("Host", "localhost"));
         AtomicBoolean forwarded = new AtomicBoolean();
         filter(true).filter(exchange, ignored -> { forwarded.set(true); return Mono.empty(); }).block();
         assertThat(forwarded).isFalse();

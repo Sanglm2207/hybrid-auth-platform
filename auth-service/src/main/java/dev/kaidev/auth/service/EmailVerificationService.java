@@ -96,6 +96,7 @@ public class EmailVerificationService {
             ApiLog.event(org.slf4j.LoggerFactory.getLogger(EmailVerificationService.class), "email.verification.sent", "OTP_SENT");
         } catch (MailException e) {
             // Never expose SMTP credentials, provider responses, or the OTP to the client.
+            ApiLog.failure(AuthCode.EMAIL_DELIVERY_FAILED.name(), e, org.slf4j.MDC.get("traceId"));
             throw new ApiException(AuthCode.EMAIL_DELIVERY_FAILED);
         }
     }

@@ -1,6 +1,6 @@
 # API contract
 
-Business endpoints at `/auth/**` and `/users/**` return JSON with the same keys on success and failure:
+Business endpoints at `/api/v1/auth/**` and `/api/v1/users/**` return JSON with the same keys on success and failure:
 
 ```json
 {
@@ -22,19 +22,25 @@ On success, `success` is `true`, `data` contains the endpoint's result (or `null
 
 JWKS (`/.well-known/jwks.json` on Auth) and Actuator retain their standard response formats. Successful CORS preflight returns HTTP 204 without a body. These protocol endpoints are intentionally excluded from the business response envelope.
 
+## API versions
+
+Business APIs use `/api/v1` on both the Gateway and the services. Unversioned `/auth/**` and `/users/**` URLs are no longer mapped. JWKS and Actuator URLs stay unchanged.
+
+Java controllers and security matchers share version roots in `api-common`'s `ApiPaths`. Gateway routes in `api-gateway/src/main/resources/application.yml` have explicit version IDs (`auth-service-v1`, `user-service-v1`) and path predicates. To introduce v2 alongside v1, add `V2` roots, separate v2 controller mappings and security rules, and corresponding `/api/v2/**` Gateway routes. Keep v1 mappings while clients migrate.
+
 ## Endpoints
 
 All POST endpoints below consume `application/json`.
 
 | Endpoint | Request fields | Success | Data |
 | --- | --- | --- | --- |
-| `POST /auth/register` | `email`, `password` | 201 `REGISTERED` | `id`, `email`, `emailVerified` |
-| `POST /auth/verify-email` | `email`, `otp` | 200 `EMAIL_VERIFIED` | `null` |
-| `POST /auth/resend-otp` | `email` | 200 `OTP_REQUESTED` | `null` |
-| `POST /auth/login` | `email`, `password` | 200 `LOGGED_IN` | `accessToken`, `refreshToken`, `tokenType`, `expiresIn` |
-| `POST /auth/refresh` | `refreshToken` | 200 `TOKEN_REFRESHED` | Same token fields as login |
-| `POST /auth/logout` | `refreshToken` | 200 `LOGGED_OUT` | `null` |
-| `GET /users/me` | Bearer access token | 200 `OK` | `id`, `roles` |
+| `POST /api/v1/auth/register` | `email`, `password` | 201 `REGISTERED` | `id`, `email`, `emailVerified` |
+| `POST /api/v1/auth/verify-email` | `email`, `otp` | 200 `EMAIL_VERIFIED` | `null` |
+| `POST /api/v1/auth/resend-otp` | `email` | 200 `OTP_REQUESTED` | `null` |
+| `POST /api/v1/auth/login` | `email`, `password` | 200 `LOGGED_IN` | `accessToken`, `refreshToken`, `tokenType`, `expiresIn` |
+| `POST /api/v1/auth/refresh` | `refreshToken` | 200 `TOKEN_REFRESHED` | Same token fields as login |
+| `POST /api/v1/auth/logout` | `refreshToken` | 200 `LOGGED_OUT` | `null` |
+| `GET /api/v1/users/me` | Bearer access token | 200 `OK` | `id`, `roles` |
 
 Logout now returns **200 with JSON**, replacing the earlier 204 response. Tokens now live under `data`, for example `response.data.accessToken`.
 

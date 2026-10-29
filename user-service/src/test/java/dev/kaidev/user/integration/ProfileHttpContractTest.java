@@ -33,21 +33,21 @@ class ProfileHttpContractTest {
     }
 
     @Test void authenticatedProfileUsesSharedResponse() throws Exception {
-        mvc.perform(get("/users/me").header("Authorization", "Bearer valid-token"))
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.code").value("OK")).andExpect(jsonPath("$.data.id").value("user-123"))
                 .andExpect(jsonPath("$.data.roles[0]").value("USER"));
     }
 
     @Test void missingOrInvalidTokenUsesSharedError() throws Exception {
-        mvc.perform(get("/users/me")).andExpect(status().isUnauthorized())
+        mvc.perform(get("/api/v1/users/me")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false)).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
-        mvc.perform(get("/users/me").header("Authorization", "Bearer invalid-token"))
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test void unknownAuthenticatedRouteUsesSharedNotFound() throws Exception {
-        mvc.perform(get("/users/missing").header("Authorization", "Bearer valid-token"))
+        mvc.perform(get("/api/v1/users/missing").header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 }

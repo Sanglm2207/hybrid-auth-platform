@@ -1,5 +1,6 @@
 package dev.kaidev.auth.controller;
 
+import dev.kaidev.common.api.ApiPaths;
 import dev.kaidev.auth.constant.AuthCode;
 import dev.kaidev.auth.dto.request.EmailRequest;
 import dev.kaidev.auth.dto.request.LoginRequest;
@@ -40,26 +41,26 @@ public class AuthController {
         this.verification = verification;
     }
 
-    @PostMapping("/auth/register")
+    @PostMapping(ApiPaths.AUTH_V1 + "/register")
     @ResponseStatus(HttpStatus.CREATED)
     ApiResponse<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
         AppUser user = verification.register(request.email(), request.password());
         return ServletApi.success(AuthCode.REGISTERED, new RegistrationResponse(user.id, user.email, user.emailVerified));
     }
 
-    @PostMapping("/auth/verify-email")
+    @PostMapping(ApiPaths.AUTH_V1 + "/verify-email")
     ApiResponse<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
         verification.verify(request.email(), request.otp());
         return ServletApi.success(AuthCode.EMAIL_VERIFIED, null);
     }
 
-    @PostMapping("/auth/resend-otp")
+    @PostMapping(ApiPaths.AUTH_V1 + "/resend-otp")
     ApiResponse<Void> resendOtp(@Valid @RequestBody EmailRequest request) {
         verification.resend(request.email());
         return ServletApi.success(AuthCode.OTP_REQUESTED, null);
     }
 
-    @PostMapping("/auth/login")
+    @PostMapping(ApiPaths.AUTH_V1 + "/login")
     ApiResponse<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         AppUser user = users.findByEmail(request.email()).orElseThrow(() -> new ApiException(AuthCode.INVALID_CREDENTIALS));
         if (!passwords.matches(request.password(), user.passwordHash))
@@ -68,12 +69,12 @@ public class AuthController {
         return ServletApi.success(AuthCode.LOGGED_IN, sessions.issue(user));
     }
 
-    @PostMapping("/auth/refresh")
+    @PostMapping(ApiPaths.AUTH_V1 + "/refresh")
     ApiResponse<TokenResponse> refresh(@Valid @RequestBody RefreshRequest request) {
         return ServletApi.success(AuthCode.TOKEN_REFRESHED, sessions.rotate(request.refreshToken(), users));
     }
 
-    @PostMapping("/auth/logout")
+    @PostMapping(ApiPaths.AUTH_V1 + "/logout")
     ApiResponse<Void> logout(@Valid @RequestBody RefreshRequest request) {
         sessions.revoke(request.refreshToken());
         return ServletApi.success(AuthCode.LOGGED_OUT, null);

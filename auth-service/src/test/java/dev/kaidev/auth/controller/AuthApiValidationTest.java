@@ -29,7 +29,7 @@ class AuthApiValidationTest {
 
     @Test
     void shortPasswordReturnsActionableMessageWithoutEchoingPassword() throws Exception {
-        String body = mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
+        String body = mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"password\":\"Short123!\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].message").value("Password must contain at least 12 characters and at most 72 UTF-8 bytes"))
@@ -42,7 +42,7 @@ class AuthApiValidationTest {
     void smtpFailureIncludesSafeReasonInResponse() throws Exception {
         when(verification.register("test@example.com", "StrongPassword123!"))
                 .thenThrow(new ApiException(AuthCode.EMAIL_NOT_CONFIGURED));
-        mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"password\":\"StrongPassword123!\"}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").value("Email delivery is not configured"));

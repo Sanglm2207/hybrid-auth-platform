@@ -53,7 +53,7 @@ class GatewayAccessTest {
     }
 
     @Test void approvedPreflightWorksWithoutJwt() {
-        client.options().uri("/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
+        client.options().uri("/api/v1/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type,x-request-id")
                 .exchange().expectStatus().isNoContent()
@@ -61,31 +61,38 @@ class GatewayAccessTest {
     }
 
     @Test void rejectsUnapprovedPreflightMethodAndHeaderWithEnvelope() {
-        client.options().uri("/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
+        client.options().uri("/api/v1/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE")
                 .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("CORS_REJECTED");
-        client.options().uri("/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
+        client.options().uri("/api/v1/auth/register").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "x-unapproved-header")
                 .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("CORS_REJECTED");
     }
 
     @Test void missingAndInvalidJwtUseSameEnvelopeAndCorsHeaders() {
-        client.get().uri("/users/me").header(HttpHeaders.ORIGIN, "https://client.example.com")
+        client.get().uri("/api/v1/users/me").header(HttpHeaders.ORIGIN, "https://client.example.com")
                 .exchange().expectStatus().isUnauthorized()
                 .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://client.example.com")
                 .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
-        client.get().uri("/users/me").headers(headers -> headers.setBearerAuth("bad-token"))
+        client.get().uri("/api/v1/users/me").headers(headers -> headers.setBearerAuth("bad-token"))
                 .exchange().expectStatus().isUnauthorized().expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
     }
 
     @Test void upstreamConnectionFailureHasSafeEnvelope() {
-        client.post().uri("/auth/login").header("X-Request-Id", "12345678-1234-1234-1234-123456789abc")
+        client.post().uri("/api/v1/auth/login").header("X-Request-Id", "12345678-1234-1234-1234-123456789abc")
                 .exchange().expectStatus().isEqualTo(502)
                 .expectHeader().valueEquals("X-Request-Id", "12345678-1234-1234-1234-123456789abc")
                 .expectBody().jsonPath("$.code").isEqualTo("UPSTREAM_UNAVAILABLE")
                 .jsonPath("$.traceId").isEqualTo("12345678-1234-1234-1234-123456789abc")
                 .jsonPath("$.message").isEqualTo("Upstream service is unavailable");
+    }
+
+    @Test void unversionedAndFutureAuthPathsAreNotPublic() {
+        for (String path : new String[]{"/auth/login", "/api/v2/auth/login"}) {
+            client.post().uri(path).exchange().expectStatus().isUnauthorized()
+                    .expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
+        }
     }
 
     @Test void allowedHostWithoutOriginCanRunHealthChecks() {

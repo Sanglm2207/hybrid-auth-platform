@@ -68,29 +68,29 @@ class AuthHttpContractTest {
 
     static Stream<Arguments> invalidForms() {
         return Stream.of(
-                Arguments.of("/auth/register", "{}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/register", "{\"email\":null,\"password\":null}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/register", "{\"email\":\"bad\",\"password\":\"short\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/register", "{\"email\":\"a@example.com\",\"password\":\"" + "a".repeat(73) + "\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/register", "{\"email\":\"a@example.com\",\"password\":\"" + "界".repeat(25) + "\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/register", "{\"email\":123,\"password\":false}", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "{\"email\":\"a@example.com\",\"password\":\"StrongPassword123!\",\"role\":\"ADMIN\"}", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "{\"email\":\"a@example.com\",\"email\":\"b@example.com\"}", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "{\"email\":", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "null", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "[]", "INVALID_REQUEST"),
-                Arguments.of("/auth/register", "{} {}", "INVALID_REQUEST"),
-                Arguments.of("/auth/login", "{\"email\":\"bad\",\"password\":\"\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/login", "{\"email\":\"a@example.com\",\"password\":\"" + "界".repeat(25) + "\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":\"12345\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":123456}", "INVALID_REQUEST"),
-                Arguments.of("/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":\"12a456\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/verify-email", "{}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/resend-otp", "{\"email\":\" \"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/resend-otp", "{\"email\":\"" + "a".repeat(250) + "@example.com\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/refresh", "{}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/refresh", "{\"refreshToken\":\"invalid\"}", "VALIDATION_FAILED"),
-                Arguments.of("/auth/logout", "{\"refreshToken\":null}", "VALIDATION_FAILED"));
+                Arguments.of("/api/v1/auth/register", "{}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":null,\"password\":null}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":\"bad\",\"password\":\"short\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":\"a@example.com\",\"password\":\"" + "a".repeat(73) + "\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":\"a@example.com\",\"password\":\"" + "界".repeat(25) + "\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":123,\"password\":false}", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":\"a@example.com\",\"password\":\"StrongPassword123!\",\"role\":\"ADMIN\"}", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":\"a@example.com\",\"email\":\"b@example.com\"}", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "{\"email\":", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "null", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "[]", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/register", "{} {}", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/login", "{\"email\":\"bad\",\"password\":\"\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/login", "{\"email\":\"a@example.com\",\"password\":\"" + "界".repeat(25) + "\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":\"12345\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":123456}", "INVALID_REQUEST"),
+                Arguments.of("/api/v1/auth/verify-email", "{\"email\":\"a@example.com\",\"otp\":\"12a456\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/verify-email", "{}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/resend-otp", "{\"email\":\" \"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/resend-otp", "{\"email\":\"" + "a".repeat(250) + "@example.com\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/refresh", "{}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/refresh", "{\"refreshToken\":\"invalid\"}", "VALIDATION_FAILED"),
+                Arguments.of("/api/v1/auth/logout", "{\"refreshToken\":null}", "VALIDATION_FAILED"));
     }
 
     @ParameterizedTest @MethodSource("invalidForms")
@@ -104,35 +104,35 @@ class AuthHttpContractTest {
     }
 
     @Test void emptyBodyAndUnsupportedMediaAreNormalized() throws Exception {
-        mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON))
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-        mvc.perform(post("/auth/register").contentType(MediaType.TEXT_PLAIN).content("body"))
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.TEXT_PLAIN).content("body"))
                 .andExpect(status().isUnsupportedMediaType()).andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
-        mvc.perform(get("/auth/register")).andExpect(status().isMethodNotAllowed())
+        mvc.perform(get("/api/v1/auth/register")).andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
     }
 
     @Test void registrationVerificationLoginAndLogoutShareContract() throws Exception {
-        mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\" TEST@EXAMPLE.COM \",\"password\":\"StrongPassword123!\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.code").value("REGISTERED"))
                 .andExpect(jsonPath("$.success").value(true)).andExpect(jsonPath("$.data.email").value("test@example.com"))
                 .andExpect(jsonPath("$.data.emailVerified").value(false));
-        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"password\":\"StrongPassword123!\"}"))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"));
         ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail).send(message.capture());
         String otp = message.getValue().getText().split(": ")[1].substring(0, 6);
-        mvc.perform(post("/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"otp\":\"" + otp + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("EMAIL_VERIFIED"));
         when(sessions.issue(any(AppUser.class))).thenReturn(new TokenResponse("test-access", "test-refresh", "Bearer", 900));
-        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"test@example.com\",\"password\":\"StrongPassword123!\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("LOGGED_IN"))
                 .andExpect(jsonPath("$.data.accessToken").value("test-access"));
-        mvc.perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + "a".repeat(43) + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("LOGGED_OUT"));
     }
@@ -148,7 +148,7 @@ class AuthHttpContractTest {
 
     @Test void unexpectedErrorsHideInternalMessages() throws Exception {
         when(sessions.rotate(anyString(), any())).thenThrow(new IllegalStateException("secret-internal-detail"));
-        String body = mvc.perform(post("/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+        String body = mvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + "a".repeat(43) + "\"}"))
                 .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andReturn().getResponse().getContentAsString();

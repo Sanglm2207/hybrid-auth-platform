@@ -1,5 +1,6 @@
 package dev.kaidev.user.controller;
 
+import dev.kaidev.common.api.ApiPaths;
 import dev.kaidev.common.api.code.CommonCode;
 import dev.kaidev.common.api.response.ApiResponse;
 import dev.kaidev.common.servlet.support.ServletApi;
@@ -11,7 +12,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/users")
+@RequestMapping(ApiPaths.USERS_V1)
 public class ProfileController {
     @GetMapping("/me")
     public ApiResponse<ProfileResponse> me(@AuthenticationPrincipal Jwt jwt) {

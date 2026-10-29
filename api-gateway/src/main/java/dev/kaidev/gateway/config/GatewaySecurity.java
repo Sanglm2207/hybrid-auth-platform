@@ -1,5 +1,6 @@
 package dev.kaidev.gateway.config;
 
+import dev.kaidev.common.api.ApiPaths;
 import dev.kaidev.common.reactive.security.ReactiveSecurityErrors;
 import dev.kaidev.gateway.config.properties.GatewayAccessProperties;
 
@@ -20,7 +21,7 @@ public class GatewaySecurity {
     @Bean
     SecurityWebFilterChain chain(ServerHttpSecurity http, ReactiveSecurityErrors errors) {
         return http.csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
-                .pathMatchers("/auth/register", "/auth/verify-email", "/auth/resend-otp", "/auth/login", "/auth/refresh", "/auth/logout", "/actuator/health")
+                .pathMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
                 .permitAll().anyExchange().authenticated()).oauth2ResourceServer(x -> x.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
     }
