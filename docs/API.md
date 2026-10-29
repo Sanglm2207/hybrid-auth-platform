@@ -30,19 +30,28 @@ Java controllers and security matchers share version roots in `api-common`'s `Ap
 
 ## Endpoints
 
-All POST endpoints below consume `application/json`.
+POST endpoints consume `application/json`, except `/api/v1/auth/logout-all`, which requires only a Bearer access JWT and no body.
 
 | Endpoint | Request fields | Success | Data |
 | --- | --- | --- | --- |
 | `POST /api/v1/auth/register` | `email`, `password` | 201 `REGISTERED` | `id`, `email`, `emailVerified` |
 | `POST /api/v1/auth/verify-email` | `email`, `otp` | 200 `EMAIL_VERIFIED` | `null` |
+| `POST /api/v1/auth/resend-verification` | `email` | 200 `OTP_REQUESTED` | `null` |
 | `POST /api/v1/auth/resend-otp` | `email` | 200 `OTP_REQUESTED` | `null` |
+| `POST /api/v1/auth/forgot-password` | `email` | 200 `PASSWORD_RESET_REQUESTED` | `null` |
+| `POST /api/v1/auth/reset-password` | `token`, `newPassword` | 200 `PASSWORD_RESET` | `null` |
+| `POST /api/v1/auth/change-password` | Bearer JWT; `currentPassword`, `newPassword` | 200 `PASSWORD_CHANGED` | `null` |
+| `POST /api/v1/auth/change-email` | Bearer JWT; `currentPassword`, `newEmail` | 200 `EMAIL_CHANGE_REQUESTED` | `null` |
+| `POST /api/v1/auth/confirm-email-change` | `token` from new inbox | 200 `EMAIL_CHANGED` | `null` |
 | `POST /api/v1/auth/login` | `email`, `password` | 200 `LOGGED_IN` | `accessToken`, `refreshToken`, `tokenType`, `expiresIn` |
 | `POST /api/v1/auth/refresh` | `refreshToken` | 200 `TOKEN_REFRESHED` | Same token fields as login |
 | `POST /api/v1/auth/logout` | `refreshToken` | 200 `LOGGED_OUT` | `null` |
+| `POST /api/v1/auth/logout-all` | Bearer access token; no body | 200 `ALL_DEVICES_LOGGED_OUT` | `null` |
 | `GET /api/v1/users/me` | Bearer access token | 200 `OK` | `id`, `roles` |
 
 Logout now returns **200 with JSON**, replacing the earlier 204 response. Tokens now live under `data`, for example `response.data.accessToken`.
+
+Mail runs a separate internal API on port `8703` at `/api/v1/mail/**`, authenticated by `X-Mail-Service-Key`. It is not routed through the Gateway. See [Mail service](MAIL_SERVICE.md) for its endpoints, template configuration, and failure behavior.
 
 ## Input validation
 
@@ -58,20 +67,32 @@ Logout now returns **200 with JSON**, replacing the earlier 204 response. Tokens
 
 | HTTP status | Codes |
 | --- | --- |
-| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST`, `INVALID_OTP` |
+| 400 | `VALIDATION_FAILED`, `INVALID_REQUEST`, `INVALID_OTP`, `INVALID_ACCOUNT_TOKEN`, `PASSWORD_UNCHANGED`, `EMAIL_UNCHANGED` |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN` |
 | 403 | `ACCESS_DENIED`, `EMAIL_NOT_VERIFIED`, `HOST_NOT_ALLOWED`, `ORIGIN_NOT_ALLOWED`, `CORS_REJECTED` |
 | 404 | `NOT_FOUND` |
 | 405 | `METHOD_NOT_ALLOWED` |
 | 409 | `EMAIL_EXISTS`, `CONFLICT` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
-| 429 | `OTP_COOLDOWN`, `OTP_ATTEMPTS_EXCEEDED`, `TOO_MANY_REQUESTS` |
+| 429 | `OTP_COOLDOWN`, `OTP_ATTEMPTS_EXCEEDED`, `TOO_MANY_REQUESTS`, `RATE_LIMITED`, `ACCOUNT_TEMPORARILY_LOCKED`, `ACCOUNT_ACTION_COOLDOWN` |
 | 500 | `INTERNAL_ERROR` |
 | 502 | `UPSTREAM_UNAVAILABLE` |
-| 503 | `EMAIL_NOT_CONFIGURED`, `EMAIL_DELIVERY_FAILED`, `SERVICE_UNAVAILABLE` |
+| 503 | `EMAIL_NOT_CONFIGURED`, `EMAIL_DELIVERY_FAILED`, `SECURITY_UNAVAILABLE`, `SERVICE_UNAVAILABLE` |
 | 504 | `UPSTREAM_TIMEOUT` |
 
-Known business failures have public catalog messages. Unexpected failures return a generic message; exception text, SQL, provider responses, and stack traces are excluded from the response. Missing and invalid JWTs use the same shared envelope in every service. Authentication is stateless.
+Known business failures have public catalog messages. Unexpected failures return a generic message; exception text, SQL, provider responses, and stack traces are excluded from the response. Missing and invalid JWTs use the same shared envelope in every service. Access JWT validation is stateless; refresh sessions, rate limiting, and lockout use shared Redis state.
+
+## P1 account lifecycle
+
+Verification/resend keep their existing one-time hashed OTPs; `resend-verification` aliases `resend-otp`. Forgot-password responds generically before lookup/delivery using a bounded background executor. Reset and email-change tokens are random, single-use opaque values with a 15-minute TTL and SHA-256 hashes in SQL. Authenticated password/email changes require the current password. Confirming the new inbox is required before replacing the account email. Reset/change invalidates pending lifecycle proofs and all refresh sessions; issued access JWTs still expire normally.
+
+Every email template includes a Mail-managed signature configured with `MAIL_SIGNATURE`. See [P1 account lifecycle](ACCOUNT_LIFECYCLE_P1.md) for request/response behavior, cooldowns, concurrency, and notification delivery.
+
+## P0 authentication controls
+
+Refresh rotation is atomic across Auth instances. Reusing a consumed token revokes its whole family; clients must serialize refresh attempts. Refresh families have a seven-day absolute expiry. Logout-all invalidates all existing refresh generations for the JWT subject; issued access JWTs still remain valid until expiry.
+
+Login rate limiting and temporary lockout return HTTP 429 with `Retry-After` and stable `RATE_LIMITED` / `ACCOUNT_TEMPORARILY_LOCKED` codes. Redis security failures return HTTP 503 (`SECURITY_UNAVAILABLE`). Gateway and Auth share an `AUTH_PROXY_KEY` generated during preparation for trustworthy client-IP propagation. See [P0 security hardening](SECURITY_P0.md) for configuration, migration, key-rotation commands, and audit events.
 
 ## Gateway host and origin policy
 
@@ -85,7 +106,7 @@ GATEWAY_REQUIRE_ORIGIN=false
 
 `GATEWAY_ALLOWED_HOSTS` is the exact list of API hostnames in the incoming `Host` header, without scheme or port. It identifies the requested API hostname, not the caller's hostname. `GATEWAY_ALLOWED_ORIGINS` is the exact list of frontend origins including scheme and optional port, without a trailing slash or path. Wildcards are rejected at startup. Configure actual deployment domains before exposing the Gateway.
 
-Unknown hosts and supplied unknown origins are rejected before proxying, even outside a browser. CORS allows GET, POST, OPTIONS and the Authorization, Content-Type, X-Request-Id headers. Only approved origins receive CORS response headers. Cookies/credentialed CORS are disabled because the current API uses Bearer tokens.
+Unknown hosts and supplied unknown origins are rejected before proxying, even outside a browser. CORS allows GET, POST, OPTIONS and the Authorization, Content-Type, X-Request-Id headers. Only approved origins receive CORS response headers; `X-Request-Id` and `Retry-After` are exposed for browser clients. Cookies/credentialed CORS are disabled because the current API uses Bearer tokens.
 
 When `GATEWAY_REQUIRE_ORIGIN=false`, requests without Origin can be made by terminal/API clients and health checks. When `true`, API requests also require an approved Origin; GET `/actuator/health` remains available without it. Client-supplied Forwarded/X-Forwarded headers are removed before host checking; the application does not derive the trusted host from them.
 
