@@ -1,4 +1,4 @@
-package dev.kaidev.common.api;
+package dev.kaidev.common.api.code;
 
 import org.springframework.http.HttpStatus;
 

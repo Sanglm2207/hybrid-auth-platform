@@ -1,4 +1,4 @@
-package dev.kaidev.common.validation;
+package dev.kaidev.common.validation.annotation;
 
 import java.lang.annotation.*;
 import jakarta.validation.*;

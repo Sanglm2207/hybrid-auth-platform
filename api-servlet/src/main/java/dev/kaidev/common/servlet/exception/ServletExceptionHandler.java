@@ -1,6 +1,13 @@
-package dev.kaidev.common.servlet;
+package dev.kaidev.common.servlet.exception;
 
-import dev.kaidev.common.api.*;
+import dev.kaidev.common.api.code.ApiCode;
+import dev.kaidev.common.api.code.CommonCode;
+import dev.kaidev.common.api.response.ApiResponse;
+import dev.kaidev.common.api.response.FieldViolation;
+import dev.kaidev.common.exception.ApiException;
+import dev.kaidev.common.logging.ApiLog;
+import dev.kaidev.common.servlet.support.ServletApi;
+
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;

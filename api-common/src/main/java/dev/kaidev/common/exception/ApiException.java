@@ -1,4 +1,6 @@
-package dev.kaidev.common.api;
+package dev.kaidev.common.exception;
+
+import dev.kaidev.common.api.code.ApiCode;
 
 import org.springframework.web.server.ResponseStatusException;
 

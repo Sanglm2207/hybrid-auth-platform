@@ -1,4 +1,6 @@
-package dev.kaidev.common.api;
+package dev.kaidev.common.api.response;
+
+import dev.kaidev.common.api.code.ApiCode;
 
 import java.time.Instant;
 import java.util.List;

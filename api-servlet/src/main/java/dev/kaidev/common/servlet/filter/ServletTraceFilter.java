@@ -1,6 +1,9 @@
-package dev.kaidev.common.servlet;
+package dev.kaidev.common.servlet.filter;
 
-import dev.kaidev.common.api.*;
+import dev.kaidev.common.logging.ApiLog;
+import dev.kaidev.common.servlet.support.ServletApi;
+import dev.kaidev.common.trace.RequestTrace;
+
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import java.io.IOException;

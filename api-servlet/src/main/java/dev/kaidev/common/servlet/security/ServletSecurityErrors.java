@@ -1,7 +1,9 @@
-package dev.kaidev.common.servlet;
+package dev.kaidev.common.servlet.security;
+
+import dev.kaidev.common.api.code.CommonCode;
+import dev.kaidev.common.servlet.support.ServletApi;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.kaidev.common.api.CommonCode;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import org.springframework.security.core.AuthenticationException;

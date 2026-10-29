@@ -1,6 +1,9 @@
-package dev.kaidev.common.servlet;
+package dev.kaidev.common.servlet.controller;
 
-import dev.kaidev.common.api.*;
+import dev.kaidev.common.api.code.CommonCode;
+import dev.kaidev.common.api.response.ApiResponse;
+import dev.kaidev.common.servlet.support.ServletApi;
+
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
