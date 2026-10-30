@@ -23,6 +23,16 @@ spring:
               uri: ${AUTH_URL:http://localhost:8701}
               predicates:
                 - Path=/api/v1/auth/**
+            - id: account-export-v1
+              uri: ${AUTH_URL:http://localhost:8701}
+              predicates:
+                - Path=/api/v1/users/me/export
+                - Method=GET
+            - id: account-deletion-v1
+              uri: ${AUTH_URL:http://localhost:8701}
+              predicates:
+                - Path=/api/v1/users/me
+                - Method=DELETE
             - id: user-service-v1
               uri: ${USER_URL:http://localhost:8702}
               predicates:

@@ -16,10 +16,19 @@ public class ProfileService {
     private final ProfileRepository profiles;
     public ProfileService(ProfileRepository profiles) { this.profiles = profiles; }
     @Transactional(readOnly = true)
-    public ProfileResponse me(UUID user, List<String> roles) { return response(profiles.findById(user).orElseGet(() -> new UserProfile(user)), roles); }
+    public ProfileResponse me(UUID user, List<String> roles) {
+        var profile=profiles.findById(user).orElseGet(()->new UserProfile(user));requirePresent(profile);return response(profile,roles);
+    }
+    private void requirePresent(UserProfile profile){if(profile.deleted)throw new ApiException(CommonCode.NOT_FOUND);}
+    @Transactional public void erase(UUID owner){
+        var profile=profiles.findForUpdate(owner).orElseGet(()->new UserProfile(owner));
+        profile.deleted=true;profile.displayName="";profile.bio="";profile.locale="en";profile.timeZone="UTC";profile.updatedAt=Instant.now();
+        profiles.saveAndFlush(profile);
+    }
     @Transactional
     public ProfileResponse patch(UUID user, List<String> roles, UpdateProfileRequest request) {
         var profile = profiles.findForUpdate(user).orElseGet(() -> new UserProfile(user));
+        requirePresent(profile);
         long version = profile.version == null ? 0 : profile.version;
         if (request.version() != null && request.version() != version) throw new ApiException(CommonCode.CONFLICT);
         if (request.displayName() != null) profile.displayName = request.displayName();

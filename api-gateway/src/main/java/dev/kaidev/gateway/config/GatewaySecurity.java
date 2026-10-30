@@ -27,6 +27,8 @@ public class GatewaySecurity {
                 .pathMatchers(ApiPaths.AUTH_V1 + "/account-actions.js", ApiPaths.AUTH_V1 + "/service-tokens", ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
                         ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
                 .permitAll()
+                .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me/export").hasAuthority("account:export")
+                .pathMatchers(org.springframework.http.HttpMethod.DELETE, ApiPaths.USERS_V1 + "/me").hasAuthority("account:delete")
                 .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:read")
                 .pathMatchers(org.springframework.http.HttpMethod.PATCH, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:write")
                 .pathMatchers(org.springframework.http.HttpMethod.GET,"/api/v1/users/*").hasAnyAuthority("profile:read","users:read")

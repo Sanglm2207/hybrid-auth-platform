@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface AccountActionTokenRepository extends JpaRepository<AccountActionToken, UUID> {
+    @Modifying @Query("delete from AccountActionToken t where t.userId=:user")
+    void eraseFor(@Param("user")UUID user);
     Optional<AccountActionToken> findByTokenHash(String hash);
 
     @Query("select t.userId from AccountActionToken t where t.tokenHash = :hash")

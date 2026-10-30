@@ -48,6 +48,8 @@ app:
     login-observation-seconds: ${LOGIN_OBSERVATION_SECONDS:900}
     login-lock-seconds: ${LOGIN_LOCK_SECONDS:300}
     refresh-ttl-seconds: 604800
+  user-service:
+    url: ${USER_URL:http://127.0.0.1:8702}
   mail-service:
     url: ${MAIL_SERVICE_URL:http://127.0.0.1:8703}
     api-key: ${MAIL_SERVICE_API_KEY:}

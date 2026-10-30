@@ -41,4 +41,12 @@ public class AuthOutbox {
         jdbc.update("update auth_outbox set state=?,available_at=?,error_code='DELIVERY_FAILED' where id=? and state='PROCESSING' and attempts=?",
                 dead?"FAILED":"PENDING",Timestamp.from(Instant.now().plusSeconds(Math.min(300,1L<<Math.min(8,job.attempts()+1)))),job.id(),job.attempts()+1);
     }
+    @Transactional public void cancelRecipient(String email){
+        var jobs=jdbc.query("select * from auth_outbox where state in ('PENDING','PROCESSING','FAILED') and encrypted_payload<>''",
+                (rs,n)->new Job(rs.getObject("id",UUID.class),rs.getString("kind"),rs.getString("encrypted_payload"),rs.getString("trace_id"),rs.getInt("attempts"),rs.getTimestamp("expires_at").toInstant()));
+        for(var job:jobs){var data=payload(job);
+            if(email.equals(data.path("to").asText())||email.equals(data.path("email").asText()))
+                jdbc.update("update auth_outbox set state='CANCELLED',encrypted_payload='',completed_at=? where id=?",Timestamp.from(Instant.now()),job.id());
+        }
+    }
 }

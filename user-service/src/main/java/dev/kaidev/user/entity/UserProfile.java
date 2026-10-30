@@ -13,6 +13,7 @@ public class UserProfile {
     @Column(nullable = false, length = 35) public String locale = "en";
     @Column(nullable = false, length = 64) public String timeZone = "UTC";
     @Column(nullable = false) public Instant updatedAt = Instant.now();
+    @Column(nullable=false) public boolean deleted;
     @Version @Column(nullable = false) public Long version;
     protected UserProfile() {}
     public UserProfile(UUID userId) { this.userId = userId; }

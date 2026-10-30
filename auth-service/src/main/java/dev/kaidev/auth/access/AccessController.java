@@ -25,35 +25,35 @@ public class AccessController {
             @ValidPassword(min=1)String currentPassword){@Override public String toString(){return "KeyRequest[REDACTED]";}}
     public record TokenRequest(@NotBlank @Size(max=8192)String token){@Override public String toString(){return "TokenRequest[REDACTED]";}}
     public record TenantRequest(@NotBlank @Size(max=100)String name,@ValidPassword(min=1)String currentPassword){@Override public String toString(){return "TenantRequest[REDACTED]";}}
-    private final UserAdministration users;
-    private final ServiceCredentials keys;
-    private final LoginHistory history;
-    private final DeviceTrust trust;
-    private final TokenIntrospection introspection;
+    private final ReauthenticationService reauthentication;
     private final dev.kaidev.auth.service.SessionService sessions;
-    private final TenantPolicy tenants;
-    public AccessController(UserAdministration users,ServiceCredentials keys,LoginHistory history,DeviceTrust trust,TokenIntrospection introspection,dev.kaidev.auth.service.SessionService sessions,TenantPolicy tenants){
-        this.users=users;this.keys=keys;this.history=history;this.trust=trust;this.introspection=introspection;this.sessions=sessions;this.tenants=tenants;
+    private final UserAdministration users;private final LoginHistory history;private final ServiceCredentials keys;
+    private final AccountData data;private final DeviceTrust trust;private final TokenIntrospection introspection;private final TenantPolicy tenants;
+    public AccessController(UserAdministration users,LoginHistory history,ServiceCredentials keys,AccountData data,DeviceTrust trust,TokenIntrospection introspection,TenantPolicy tenants,ReauthenticationService reauthentication,dev.kaidev.auth.service.SessionService sessions){
+        this.users=users;this.history=history;this.keys=keys;this.data=data;this.trust=trust;this.introspection=introspection;this.tenants=tenants;this.reauthentication=reauthentication;this.sessions=sessions;
     }
     @GetMapping("/users") @PreAuthorize("hasAuthority('users:read')")
     public ApiResponse<?> search(@RequestParam(defaultValue="")String q,@RequestParam(required=false)Boolean locked,
             @RequestParam(required=false)Boolean active,@RequestParam(required=false)AccountStatus status,
             @RequestParam(defaultValue="email,asc")String sort,
             @RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="20")int size){return ok(users.search(q,locked,active,status,sort,page,size));}
+    @GetMapping("/users/{id}/deletion") @PreAuthorize("hasAuthority('users:read')")
+    public ApiResponse<?> deletion(@PathVariable UUID id){return ok(users.deletionStatus(id));}
     @PatchMapping("/users/{id}/status") @PreAuthorize("hasAuthority('users:update')")
     public ApiResponse<?> patchStatus(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody PatchStatus body){
         return ok(users.status(owner(jwt),id,body.status().locked(),body.status().active(),body.currentPassword()));
     }
+    @PostMapping("/reauthenticate")
+    public ApiResponse<?> reauthenticate(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody Password body){return ok(reauthentication.confirm(owner(jwt),body.currentPassword()));}
+    @GetMapping("/session/current") @PreAuthorize("hasAuthority('sessions:read')")
+    public ApiResponse<?> currentSession(@AuthenticationPrincipal Jwt jwt){
+        UUID id=UUID.fromString(jwt.getClaimAsString("sid"));
+        return ok(sessions.list(owner(jwt),id).stream().filter(session->session.id().equals(id)).findFirst()
+                .orElseThrow(()->new dev.kaidev.common.exception.ApiException(CommonCode.NOT_FOUND)));
+    }
+    // Compatibility alias for clients released before the PATCH status contract.
     @PutMapping("/users/{id}/status") @PreAuthorize("hasAuthority('users:update')")
     public ApiResponse<?> status(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Status body){return ok(users.status(owner(jwt),id,body.locked(),body.active(),body.currentPassword()));}
-    @GetMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
-    public ApiResponse<?> keys(@AuthenticationPrincipal Jwt jwt){return ok(keys.list(owner(jwt)));}
-    @PostMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
-    public ApiResponse<?> createKey(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody KeyRequest body){return ok(keys.create(owner(jwt),body.name(),body.scopes(),body.expiresAt(),body.currentPassword()));}
-    @DeleteMapping("/api-keys/{id}") @PreAuthorize("hasAuthority('keys:manage')")
-    public ApiResponse<?> revokeKey(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){keys.revoke(owner(jwt),id);return ok(null);}
-    @PostMapping("/service-tokens")
-    public ApiResponse<?> serviceToken(@RequestHeader("X-Api-Key")String secret){return ok(keys.exchange(secret));}
     @GetMapping({"/login-history","/authentication-history"}) @PreAuthorize("hasAuthority('history:read')")
     public ApiResponse<?> history(@AuthenticationPrincipal Jwt jwt,@RequestParam(required=false)Instant from,@RequestParam(required=false)Instant to,
             @RequestParam(required=false)Boolean successful,@RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="20")int size){return ok(history.list(owner(jwt),from,to,successful,page,size));}
@@ -63,12 +63,18 @@ public class AccessController {
     public ApiResponse<?> untrust(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Password body){trust.set(owner(jwt),id,0,body.currentPassword());return ok(null);}
     @PostMapping("/introspect") @PreAuthorize("hasAuthority('tokens:introspect')")
     public ApiResponse<?> introspect(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TokenRequest body){return ok(introspection.inspect(owner(jwt),body.token()));}
-    @GetMapping("/session/current") @PreAuthorize("hasAuthority('sessions:read')")
-    public ApiResponse<?> currentSession(@AuthenticationPrincipal Jwt jwt){
-        UUID id=UUID.fromString(jwt.getClaimAsString("sid"));
-        return ok(sessions.list(owner(jwt),id).stream().filter(session->session.id().equals(id)).findFirst()
-                .orElseThrow(()->new dev.kaidev.common.exception.ApiException(CommonCode.NOT_FOUND)));
-    }
+    @GetMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> keys(@AuthenticationPrincipal Jwt jwt){return ok(keys.list(owner(jwt)));}
+    @PostMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> createKey(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody KeyRequest body){return ok(keys.create(owner(jwt),body.name(),body.scopes(),body.expiresAt(),body.currentPassword()));}
+    @DeleteMapping("/api-keys/{id}") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> revokeKey(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){keys.revoke(owner(jwt),id);return ok(null);}
+    @PostMapping("/service-tokens")
+    public ApiResponse<?> serviceToken(@RequestHeader("X-Api-Key")String secret){return ok(keys.exchange(secret));}
+    @PostMapping("/export") @PreAuthorize("hasAuthority('account:export')")
+    public ApiResponse<?> export(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody Password body){return ok(data.export(owner(jwt),body.currentPassword()));}
+    @DeleteMapping("/account") @PreAuthorize("hasAuthority('account:delete')") @ResponseStatus(org.springframework.http.HttpStatus.ACCEPTED)
+    public ApiResponse<?> delete(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody Password body){data.requestDeletion(owner(jwt),body.currentPassword());return ok(Map.of("state","PENDING"));}
     @GetMapping("/tenants") public ApiResponse<?> tenants(@AuthenticationPrincipal Jwt jwt){return ok(tenants.list(owner(jwt)));}
     @PostMapping("/tenants") @PreAuthorize("hasAuthority('tenants:manage')")
     public ApiResponse<?> createTenant(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TenantRequest body){return ok(tenants.create(owner(jwt),body.name(),body.currentPassword()));}
