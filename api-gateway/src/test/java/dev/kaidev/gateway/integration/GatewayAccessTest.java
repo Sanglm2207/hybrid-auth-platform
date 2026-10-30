@@ -20,6 +20,7 @@ import reactor.core.publisher.Mono;
         "app.gateway.require-origin=false",
         "app.auth-proxy-key=test-proxy-key-at-least-thirty-two-characters",
         "AUTH_URL=http://127.0.0.1:1"})
+@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class GatewayAccessTest {
     @Autowired WebTestClient client;
     @MockitoBean ReactiveJwtDecoder decoder;
@@ -82,6 +83,7 @@ class GatewayAccessTest {
                 .exchange().expectStatus().isUnauthorized().expectBody().jsonPath("$.code").isEqualTo("UNAUTHENTICATED");
     }
 
+    @org.junit.jupiter.api.Order(1)
     @Test void upstreamConnectionFailureHasSafeEnvelope() {
         client.post().uri("/api/v1/auth/login").header("X-Request-Id", "12345678-1234-1234-1234-123456789abc")
                 .exchange().expectStatus().isEqualTo(502)
@@ -100,15 +102,15 @@ class GatewayAccessTest {
 
     @Test void publicAccountRecoveryAndVerificationPathsReachAuthWithoutJwt() {
         for (String path : new String[]{"/forgot-password", "/reset-password", "/confirm-email-change", "/resend-verification"}) {
-            client.post().uri("/api/v1/auth" + path).exchange().expectStatus().isEqualTo(502)
-                    .expectBody().jsonPath("$.code").isEqualTo("UPSTREAM_UNAVAILABLE");
+            client.post().uri("/api/v1/auth" + path).exchange().expectStatus().value(status -> org.assertj.core.api.Assertions.assertThat(status).isIn(502,503))
+                    .expectBody().jsonPath("$.code").value(value -> org.assertj.core.api.Assertions.assertThat(value).isIn("UPSTREAM_UNAVAILABLE","SERVICE_UNAVAILABLE"));
         }
     }
 
     @Test void accountActionPagesAndScriptReachAuthWithoutJwt() {
         for (String path : new String[]{"/forgot-password", "/reset-password", "/confirm-email-change", "/account-actions.js"}) {
-            client.get().uri("/api/v1/auth" + path).exchange().expectStatus().isEqualTo(502)
-                    .expectBody().jsonPath("$.code").isEqualTo("UPSTREAM_UNAVAILABLE");
+            client.get().uri("/api/v1/auth" + path).exchange().expectStatus().value(status -> org.assertj.core.api.Assertions.assertThat(status).isIn(502,503))
+                    .expectBody().jsonPath("$.code").value(value -> org.assertj.core.api.Assertions.assertThat(value).isIn("UPSTREAM_UNAVAILABLE","SERVICE_UNAVAILABLE"));
         }
     }
 

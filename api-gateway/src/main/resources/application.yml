@@ -17,11 +17,18 @@ spring:
   application:
     name: api-gateway
   config:
-    import: classpath:observability.yml
+    import: classpath:observability.yml,classpath:resilience.yml
   cloud:
     gateway:
       server:
         webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 15s
+            pool:
+              type: fixed
+              max-connections: 200
+              acquire-timeout: 2000
           routes:
             - id: auth-service-v1
               uri: ${AUTH_URL:http://localhost:8701}

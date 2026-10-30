@@ -12,6 +12,7 @@ import org.springframework.web.client.*;
 
 @Component
 public class ProfileDataClient {
+    private final dev.kaidev.common.resilience.DependencyGuard guard = new dev.kaidev.common.resilience.DependencyGuard("profiles");
     private final RestClient client;private final String key;
     @org.springframework.beans.factory.annotation.Autowired
     public ProfileDataClient(@Value("${app.user-service.url:http://127.0.0.1:8702}")String url,@Value("${app.identity.api-key:}")String key,RestClient.Builder builder){
@@ -20,14 +21,14 @@ public class ProfileDataClient {
     }
     public JsonNode export(UUID owner){
         configured();try {
-            var value=client.get().uri("/internal/users/{id}/profile",owner).header("X-Identity-Service-Key",key).retrieve().body(JsonNode.class);
+            var value=guard.read(() -> client.get().uri("/internal/users/{id}/profile",owner).header("X-Identity-Service-Key",key).retrieve().body(JsonNode.class));
             if(value==null||!value.path("success").asBoolean()||!value.has("data"))throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
             return value.path("data");
         }catch(RestClientException e){throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);}
     }
     public void delete(UUID owner){
         configured();try {
-            var value=client.delete().uri("/internal/users/{id}/profile",owner).header("X-Identity-Service-Key",key).retrieve().body(JsonNode.class);
+            var value=guard.once(() -> client.delete().uri("/internal/users/{id}/profile",owner).header("X-Identity-Service-Key",key).retrieve().body(JsonNode.class));
             if(value==null||!value.path("success").asBoolean())throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
         }catch(RestClientException e){throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);}
     }

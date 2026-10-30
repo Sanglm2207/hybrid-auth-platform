@@ -14,6 +14,7 @@ import org.springframework.web.client.*;
 
 @Component
 public class UserIdentityClient {
+    private final dev.kaidev.common.resilience.DependencyGuard guard = new dev.kaidev.common.resilience.DependencyGuard("identity");
     private final RestClient client;
     private final String key;
     public UserIdentityClient(String url,String key){this(url,key,RestClient.builder());}
@@ -26,9 +27,9 @@ public class UserIdentityClient {
     public IdentityAccess check(IdentityCheck request, String trace) {
         if (key.length() < 32) throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
         try {
-            var response = client.post().uri("/internal/identity/check").contentType(MediaType.APPLICATION_JSON)
+            var response = guard.read(() -> client.post().uri("/internal/identity/check").contentType(MediaType.APPLICATION_JSON)
                     .header("X-Identity-Service-Key", key).header("X-Request-Id", trace).body(request)
-                    .retrieve().body(new ParameterizedTypeReference<ApiResponse<IdentityAccess>>() {});
+                    .retrieve().body(new ParameterizedTypeReference<ApiResponse<IdentityAccess>>() {}));
             if (response == null || !response.success() || response.data() == null || response.data().roles() == null || response.data().permissions() == null)
                 throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
             return response.data();
@@ -38,9 +39,9 @@ public class UserIdentityClient {
         if(key.length()<32)throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
         var body=new java.util.HashMap<String,Object>();body.put("identity",identity);body.put("target",target);body.put("tenant",tenant);body.put("action",action);
         try {
-            var response=client.post().uri("/internal/identity/authorize-profile").contentType(MediaType.APPLICATION_JSON)
+            var response=guard.read(() -> client.post().uri("/internal/identity/authorize-profile").contentType(MediaType.APPLICATION_JSON)
                     .header("X-Identity-Service-Key",key).header("X-Request-Id",trace).body(body).retrieve()
-                    .body(new ParameterizedTypeReference<ApiResponse<java.util.Map<String,Boolean>>>(){});
+                    .body(new ParameterizedTypeReference<ApiResponse<java.util.Map<String,Boolean>>>(){}));
             if(response==null||!response.success()||response.data()==null||!response.data().containsKey("allowed"))throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
             if(!Boolean.TRUE.equals(response.data().get("allowed")))throw new ApiException(CommonCode.ACCESS_DENIED);
         }catch(RestClientException e){throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);}

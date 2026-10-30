@@ -39,7 +39,7 @@ public class AuthOutbox {
     public void retry(Job job){
         boolean dead=job.attempts()+1>=12||Instant.now().isAfter(job.expires());
         jdbc.update("update auth_outbox set state=?,available_at=?,error_code='DELIVERY_FAILED' where id=? and state='PROCESSING' and attempts=?",
-                dead?"FAILED":"PENDING",Timestamp.from(Instant.now().plusSeconds(Math.min(300,1L<<Math.min(8,job.attempts()+1)))),job.id(),job.attempts()+1);
+                dead?"FAILED":"PENDING",Timestamp.from(Instant.now().plusSeconds(dev.kaidev.common.resilience.DependencyGuard.backoffSeconds(job.attempts()+1))),job.id(),job.attempts()+1);
     }
     @Transactional public void cancelRecipient(String email){
         var jobs=jdbc.query("select * from auth_outbox where state in ('PENDING','PROCESSING','FAILED') and encrypted_payload<>''",

@@ -31,7 +31,7 @@ public class MailSecurity {
         var keyFilter = new OncePerRequestFilter() {
             @Override protected boolean shouldNotFilter(HttpServletRequest request) {
                 String path = request.getRequestURI().substring(request.getContextPath().length());
-                return path.equals("/actuator/health") || path.equals("/error");
+                return path.equals("/actuator/health") || path.equals("/actuator/health/liveness") || path.equals("/actuator/health/readiness") || path.equals("/error");
             }
             @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                     FilterChain chain) throws ServletException, IOException {
@@ -56,7 +56,7 @@ public class MailSecurity {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
-                .authorizeHttpRequests(a -> a.requestMatchers("/actuator/health", "/error").permitAll()
+                .authorizeHttpRequests(a -> a.requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness", "/error").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(keyFilter, AuthorizationFilter.class).build();
     }

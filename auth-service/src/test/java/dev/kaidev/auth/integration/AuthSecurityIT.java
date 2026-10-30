@@ -61,6 +61,17 @@ class AuthSecurityIT {
     @Autowired UserRepository users;
     @Autowired PasswordEncoder passwords;
     @Autowired JwtKeyRing keys;
+    @Autowired org.springframework.boot.actuate.health.HealthEndpointGroups healthGroups;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate resilienceJdbc;
+
+    @Test void readinessIncludesDependenciesAndPostgresEnforcesDeadlines() {
+        var readiness = healthGroups.get("readiness");
+        assertThat(readiness.isMember("db")).isTrue();
+        assertThat(readiness.isMember("redis")).isTrue();
+        assertThat(healthGroups.get("liveness").isMember("db")).isFalse();
+        assertThat(resilienceJdbc.queryForObject("show statement_timeout", String.class)).isEqualTo("5s");
+        assertThat(resilienceJdbc.queryForObject("show lock_timeout", String.class)).isEqualTo("2s");
+    }
     @MockitoBean MailServiceClient mail;
     AppUser owner, other;
     static final String BASE = "/api/v1/auth", PASSWORD = "StrongPassword123!";

@@ -4,7 +4,7 @@ server:
   port: 8701
 spring:
   config:
-    import: classpath:observability.yml
+    import: classpath:observability.yml,classpath:resilience.yml
   flyway:
     user: ${AUTH_MIGRATION_USERNAME:auth_migrator}
     password: ${AUTH_MIGRATION_PASSWORD:authmigrdev}
@@ -59,6 +59,11 @@ app:
   private-key: ${JWT_PRIVATE_KEY:./keys/private.pem}
   public-key: ${JWT_PUBLIC_KEY:./keys/public.pem}
 management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,redis
   endpoints:
     web:
       exposure:

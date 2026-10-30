@@ -25,7 +25,7 @@ public class GatewaySecurity {
         return http.addFilterBefore(new dev.kaidev.gateway.filter.GatewayIdentityFilter(identityUrl, identityKey, mapper,builder),
                 org.springframework.security.config.web.server.SecurityWebFiltersOrder.AUTHORIZATION).csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
                 .pathMatchers(ApiPaths.AUTH_V1 + "/account-actions.js", ApiPaths.AUTH_V1 + "/service-tokens", ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
-                        ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
+                        ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness")
                 .permitAll()
                 .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me/export").hasAuthority("account:export")
                 .pathMatchers(org.springframework.http.HttpMethod.DELETE, ApiPaths.USERS_V1 + "/me").hasAuthority("account:delete")
@@ -42,9 +42,19 @@ public class GatewaySecurity {
         return new TrustedIngressTransformer(proxies);
     }
 
-    @Bean
     ReactiveJwtDecoder decoder(@Value("${app.jwks-uri}") String url, @Value("${app.issuer}") String issuer) {
-        NimbusReactiveJwtDecoder d = NimbusReactiveJwtDecoder.withJwkSetUri(url).build();
+        return decoder(url, issuer, org.springframework.web.reactive.function.client.WebClient.builder());
+    }
+
+    @Bean
+    ReactiveJwtDecoder decoder(@Value("${app.jwks-uri}") String url, @Value("${app.issuer}") String issuer,
+            org.springframework.web.reactive.function.client.WebClient.Builder builder) {
+        var connector = new org.springframework.http.client.reactive.ReactorClientHttpConnector(
+                reactor.netty.http.client.HttpClient.create().disableRetry(true)
+                        .option(io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000)
+                        .responseTimeout(java.time.Duration.ofSeconds(3)));
+        NimbusReactiveJwtDecoder d = NimbusReactiveJwtDecoder.withJwkSetUri(url)
+                .webClient(builder.clone().clientConnector(connector).build()).build();
         d.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer),
                 new JwtClaimValidator<List<String>>("aud", a -> a != null && a.contains("hybrid-api"))));
         return d;

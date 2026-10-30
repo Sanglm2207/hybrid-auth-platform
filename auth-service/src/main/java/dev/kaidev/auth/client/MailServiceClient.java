@@ -17,6 +17,7 @@ import org.springframework.web.client.*;
 @Component
 public class MailServiceClient {
     private final dev.kaidev.auth.outbox.AuthOutbox outbox;
+    private final dev.kaidev.common.resilience.DependencyGuard guard = new dev.kaidev.common.resilience.DependencyGuard("mail");
     private final RestClient client;
     private final String apiKey;
 
@@ -36,7 +37,7 @@ public class MailServiceClient {
     public void deliver(String to,String templateId,Map<String,String> variables,java.util.UUID deliveryId){
         if (apiKey.isBlank()) throw new ApiException(AuthCode.EMAIL_NOT_CONFIGURED);
         try {
-            var response = client.post().uri(ApiPaths.MAIL_V1 + "/send")
+            var response = guard.once(() -> client.post().uri(ApiPaths.MAIL_V1 + "/send")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Mail-Service-Key", apiKey).header("Idempotency-Key",deliveryId.toString())
                     .headers(headers -> {
@@ -44,7 +45,7 @@ public class MailServiceClient {
                         if (traceId != null) headers.set(RequestTrace.HEADER, traceId);
                     })
                     .body(new MailRequest(to, templateId, variables))
-                    .retrieve().body(new ParameterizedTypeReference<ApiResponse<Void>>() {});
+                    .retrieve().body(new ParameterizedTypeReference<ApiResponse<Void>>() {}));
             if (response == null || !response.success() || !"MAIL_SENT".equals(response.code()))
                 throw new ApiException(AuthCode.EMAIL_DELIVERY_FAILED);
         } catch (RestClientException e) {

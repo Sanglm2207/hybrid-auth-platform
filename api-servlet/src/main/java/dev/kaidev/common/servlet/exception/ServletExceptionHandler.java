@@ -48,6 +48,13 @@ public class ServletExceptionHandler extends ResponseEntityExceptionHandler {
         return failure(CommonCode.CONFLICT, List.of());
     }
 
+    @ExceptionHandler({org.springframework.dao.DataAccessException.class,
+            org.springframework.transaction.TransactionException.class})
+    ResponseEntity<Object> dependencyUnavailable(Exception exception) {
+        ApiLog.failure(CommonCode.SERVICE_UNAVAILABLE.name(), exception, ServletApi.traceId());
+        return failure(CommonCode.SERVICE_UNAVAILABLE, List.of());
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     ResponseEntity<Object> denied(org.springframework.security.access.AccessDeniedException exception) {
         dev.kaidev.common.security.SecurityAudit.record(dev.kaidev.common.security.SecurityAudit.Event.ACCESS_DENIED,

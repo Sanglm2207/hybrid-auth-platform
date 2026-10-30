@@ -59,7 +59,7 @@ public class AuthConfig {
                 .authorizeHttpRequests(a -> a.requestMatchers(ApiPaths.AUTH_V1 + "/account-actions.js", ApiPaths.AUTH_V1 + "/service-tokens", ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
                         ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email",
                         ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh",
-                        ApiPaths.AUTH_V1 + "/logout", "/.well-known/jwks.json", "/actuator/health", "/error")
+                        ApiPaths.AUTH_V1 + "/logout", "/.well-known/jwks.json", "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness", "/error")
                         .permitAll().anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {})).build();
     }

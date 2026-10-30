@@ -17,6 +17,7 @@ import org.springframework.web.server.*;
 import reactor.core.publisher.Mono;
 
 public class GatewayIdentityFilter implements WebFilter {
+    private final dev.kaidev.common.resilience.DependencyGuard guard = new dev.kaidev.common.resilience.DependencyGuard("identity");
     private final WebClient client;
     private final String key;
     private final ObjectMapper mapper;
@@ -33,14 +34,14 @@ public class GatewayIdentityFilter implements WebFilter {
             var authentication = auth.get(); IdentityCheck check;
             try { check = IdentityCheck.fromClaims(authentication.getToken().getClaims()); }
             catch (RuntimeException e) { return ReactiveApi.failure(exchange, mapper, CommonCode.UNAUTHENTICATED); }
-            return client.post().uri("/internal/identity/check").contentType(MediaType.APPLICATION_JSON)
+            return guarded(client.post().uri("/internal/identity/check").contentType(MediaType.APPLICATION_JSON)
                     .header("X-Identity-Service-Key", key).header("X-Request-Id", ReactiveApi.traceId(exchange)).bodyValue(check)
                     .retrieve().bodyToMono(new ParameterizedTypeReference<ApiResponse<IdentityAccess>>() {})
                     .timeout(Duration.ofSeconds(3)).map(response -> {
                         if (!response.success() || response.data() == null || response.data().roles() == null || response.data().permissions() == null)
                             throw new IllegalStateException("Invalid identity acknowledgement");
                         return response.data();
-                    }).switchIfEmpty(Mono.error(new IllegalStateException("Missing identity acknowledgement")))
+                    }).switchIfEmpty(Mono.error(new IllegalStateException("Missing identity acknowledgement"))))
                     .onErrorResume(e -> {
                         SecurityAudit.record(SecurityAudit.Event.SECURITY_STATE_FAILURE, SecurityAudit.Outcome.UNAVAILABLE, authentication.getName(), ReactiveApi.traceId(exchange));
                         return ReactiveApi.failure(exchange, mapper, CommonCode.SERVICE_UNAVAILABLE).then(Mono.empty());
@@ -54,6 +55,17 @@ public class GatewayIdentityFilter implements WebFilter {
                         return chain.filter(exchange.mutate().principal(Mono.just(updated)).build())
                                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(updated));
                     });
+        });
+    }
+
+    private <T> Mono<T> guarded(Mono<T> request) {
+        return Mono.defer(() -> {
+            var breaker = guard.breaker();
+            if (!breaker.tryAcquirePermission()) return Mono.error(new IllegalStateException("Identity circuit open"));
+            long start = System.nanoTime();
+            return request.doOnSuccess(value -> breaker.onSuccess(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS))
+                    .doOnError(error -> breaker.onError(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS, error))
+                    .doOnCancel(breaker::releasePermission);
         });
     }
 }

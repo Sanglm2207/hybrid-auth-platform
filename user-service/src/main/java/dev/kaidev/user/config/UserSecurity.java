@@ -22,7 +22,7 @@ public class UserSecurity {
                 .requestCache(c -> c.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .authorizeHttpRequests(
-                        a -> a.requestMatchers("/actuator/health", "/error").permitAll()
+                        a -> a.requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness", "/error").permitAll()
                             .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/users/me").hasAuthority("profile:read")
                             .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/users/me").hasAuthority("profile:write")
                             .requestMatchers(org.springframework.http.HttpMethod.GET,"/api/v1/users/*").hasAnyAuthority("profile:read","users:read")
@@ -32,9 +32,16 @@ public class UserSecurity {
                 })).build();
     }
 
-    @Bean
     JwtDecoder decoder(@Value("${app.jwks-uri}") String url, @Value("${app.issuer}") String issuer) {
-        NimbusJwtDecoder d = NimbusJwtDecoder.withJwkSetUri(url).build();
+        return decoder(url, issuer, new org.springframework.boot.web.client.RestTemplateBuilder());
+    }
+
+    @Bean
+    JwtDecoder decoder(@Value("${app.jwks-uri}") String url, @Value("${app.issuer}") String issuer,
+            org.springframework.boot.web.client.RestTemplateBuilder builder) {
+        var operations = builder.connectTimeout(java.time.Duration.ofSeconds(2))
+                .readTimeout(java.time.Duration.ofSeconds(3)).build();
+        NimbusJwtDecoder d = NimbusJwtDecoder.withJwkSetUri(url).restOperations(operations).build();
         d.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(issuer),
                 new JwtClaimValidator<List<String>>("aud", a -> a != null && a.contains("hybrid-api"))));
         return d;

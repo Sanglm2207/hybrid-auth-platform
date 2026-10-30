@@ -17,6 +17,23 @@ import org.springframework.core.Ordered;
 @AutoConfiguration(before = ErrorMvcAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class ServletApiConfiguration {
+    /** Driver deadlines also cover an established connection to a paused PostgreSQL server. */
+    @Bean static org.springframework.beans.factory.config.BeanPostProcessor postgresDeadlines() {
+        return new org.springframework.beans.factory.config.BeanPostProcessor() {
+            @Override public Object postProcessBeforeInitialization(Object bean, String name) {
+                if (bean instanceof com.zaxxer.hikari.HikariDataSource pool
+                        && pool.getJdbcUrl() != null && pool.getJdbcUrl().startsWith("jdbc:postgresql:")) {
+                    var properties = pool.getDataSourceProperties();
+                    properties.putIfAbsent("connectTimeout", "2");
+                    properties.putIfAbsent("socketTimeout", "5");
+                    properties.putIfAbsent("tcpKeepAlive", "true");
+                    properties.putIfAbsent("options", "-c statement_timeout=5000 -c lock_timeout=2000");
+                }
+                return bean;
+            }
+        };
+    }
+
     @Bean
     org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer strictRequestJson() {
         return builder -> builder.featuresToEnable(

@@ -3,7 +3,7 @@ server:
   port: 8702
 spring:
   config:
-    import: classpath:observability.yml
+    import: classpath:observability.yml,classpath:resilience.yml
   flyway:
     user: ${PROFILE_MIGRATION_USERNAME:profiles}
     password: ${PROFILE_DB_PASSWORD:profiledev}
@@ -25,6 +25,11 @@ app:
   issuer: ${JWT_ISSUER:http://localhost:8701}
   jwks-uri: ${JWKS_URI:http://localhost:8701/.well-known/jwks.json}
 management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db
   endpoints:
     web:
       exposure:

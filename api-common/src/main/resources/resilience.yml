@@ -1,0 +1,28 @@
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  task:
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+  datasource:
+    hikari:
+      connection-timeout: 2000
+      validation-timeout: 1000
+  jdbc:
+    template:
+      query-timeout: 5s
+  transaction:
+    default-timeout: 10s
+management:
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState

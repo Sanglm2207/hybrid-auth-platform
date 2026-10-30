@@ -18,6 +18,12 @@ public class ReactiveExceptionHandler implements WebExceptionHandler, Ordered {
     public Mono<Void> handle(ServerWebExchange exchange, Throwable exception) {
         if (exchange.getResponse().isCommitted()) return Mono.error(exception);
         ApiCode code = code(exception);
+        if (exchange.getRequest().getPath().value().equals("/api/v1/auth/refresh")
+                && (code == CommonCode.UPSTREAM_TIMEOUT || code == CommonCode.UPSTREAM_UNAVAILABLE)) {
+            // The server may have committed rotation before the response was lost.
+            exchange.getResponse().getHeaders().set("X-Refresh-Outcome", "unknown");
+            exchange.getResponse().getHeaders().set("Cache-Control", "no-store");
+        }
         if (code.status().is5xxServerError()) ApiLog.failure(code.name(), exception, ReactiveApi.traceId(exchange));
         return ReactiveApi.failure(exchange, mapper, code);
     }

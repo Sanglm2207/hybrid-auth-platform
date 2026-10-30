@@ -12,10 +12,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OutboxWorker {
+    private volatile boolean stopping;
+    @org.springframework.context.event.EventListener(org.springframework.context.event.ContextClosedEvent.class)
+    public void stopClaiming() { stopping = true; }
     private final AuthOutbox outbox;private final AccountLifecycleService accounts;private final MailServiceClient mail;private final boolean enabled;
     public OutboxWorker(AuthOutbox outbox,AccountLifecycleService accounts,MailServiceClient mail,@Value("${app.outbox.worker-enabled:true}") boolean enabled){this.outbox=outbox;this.accounts=accounts;this.mail=mail;this.enabled=enabled;}
-    @Scheduled(fixedDelayString="${app.outbox.poll-ms:1000}") public void tick(){if(enabled)for(int i=0;i<20&&processNext();i++){} }
+    @Scheduled(fixedDelayString="${app.outbox.poll-ms:1000}") public void tick(){if(enabled)for(int i=0;i<20&&!stopping&&processNext();i++){} }
     public boolean processNext(){
+        if(stopping)return false;
         var job=outbox.claim();if(job==null)return false;String previous=MDC.get("correlationId");
         try{
             if(job.trace()!=null)MDC.put("correlationId",job.trace());
