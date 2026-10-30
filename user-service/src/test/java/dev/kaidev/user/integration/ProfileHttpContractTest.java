@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:profile-http;DB_CLOSE_DELAY=-1",
-        "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password="})
+        "spring.datasource.driver-class-name=org.h2.Driver", "spring.datasource.username=sa", "spring.datasource.password=", "app.identity.api-key=profile-internal-test-key-long-enough-123"})
 @AutoConfigureMockMvc
 class ProfileHttpContractTest {
     @Autowired MockMvc mvc;
@@ -96,5 +96,35 @@ class ProfileHttpContractTest {
                     .jwt(j -> j.subject(USER).claim("sid", UUID.randomUUID().toString()).claim("cv",0L).claim("sv",0L)))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"denied\"}"))
                 .andExpect(status().isForbidden());
+    }
+    @Test void directResourceAccessRequiresAnAuthoritativeOwnershipAndTenantDecision() throws Exception {
+        UUID target=UUID.randomUUID(),tenant=UUID.randomUUID();
+        doThrow(new ApiException(CommonCode.ACCESS_DENIED)).when(identities).authorizeProfile(any(),eq(target),any(),eq("read"),anyString());
+        mvc.perform(get("/api/v1/users/"+target).param("tenantId",tenant.toString()).header("Authorization","Bearer valid-token"))
+                .andExpect(status().isForbidden());
+        doNothing().when(identities).authorizeProfile(any(),eq(target),eq(tenant),eq("update"),anyString());
+        mvc.perform(patch("/api/v1/users/"+target).param("tenantId",tenant.toString()).header("Authorization","Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Team member\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(target.toString()));
+        verify(identities).authorizeProfile(argThat(check->check.subject().toString().equals(USER)),eq(target),eq(tenant),eq("update"),anyString());
+        doThrow(new ApiException(CommonCode.SERVICE_UNAVAILABLE)).when(identities).authorizeProfile(any(),eq(target),any(),eq("update"),anyString());
+        mvc.perform(patch("/api/v1/users/"+target).param("tenantId",tenant.toString()).header("Authorization","Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Denied\"}"))
+                .andExpect(status().isServiceUnavailable());
+    }
+    @Test void internalErasureRequiresServiceAuthenticationAndTombstonePreventsRecreation() throws Exception {
+        mvc.perform(patch("/api/v1/users/me").header("Authorization","Bearer valid-token").contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"private biography\"}"))
+                .andExpect(status().isOk());
+        String path="/internal/users/"+USER+"/profile",key="profile-internal-test-key-long-enough-123";
+        mvc.perform(delete(path)).andExpect(status().isUnauthorized());
+        mvc.perform(delete(path).header("X-Identity-Service-Key","wrong")).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).header("X-Identity-Service-Key",key)).andExpect(status().isOk()).andExpect(jsonPath("$.data.bio").value("private biography"));
+        mvc.perform(delete(path).header("X-Identity-Service-Key",key)).andExpect(status().isOk());
+        mvc.perform(delete(path).header("X-Identity-Service-Key",key)).andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/users/me").header("Authorization","Bearer valid-token").contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"resurrected\"}"))
+                .andExpect(status().isNotFound());
+        var stored=profiles.findById(UUID.fromString(USER)).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(stored.deleted).isTrue();
+        org.assertj.core.api.Assertions.assertThat(stored.bio).isEmpty();
     }
 }

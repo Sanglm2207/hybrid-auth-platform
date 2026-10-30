@@ -146,4 +146,22 @@ class AuthSecurityIT {
         for(String token:List.of(expired,forged)) mvc.perform(get(BASE+"/sessions").header("Authorization","Bearer "+token))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
+    @Test void refreshIntrospectionTracksRotationAndMachineKeysFollowLogoutGeneration() throws Exception {
+        var initial=login(owner);var observer=login(owner);
+        String caller=observer.path("accessToken").asText();String refresh=initial.path("refreshToken").asText();
+        mvc.perform(post(BASE+"/introspect").header("Authorization","Bearer "+caller).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("token",refresh))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.active").value(true));
+        refresh(refresh,200);
+        mvc.perform(post(BASE+"/introspect").header("Authorization","Bearer "+caller).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("token",refresh))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.active").value(false));
+        var created=json.readTree(mvc.perform(post(BASE+"/api-keys").header("Authorization","Bearer "+caller).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("name","integration-worker","scopes",Set.of("profile:read"),"expiresAt",Instant.now().plusSeconds(3600).toString(),"currentPassword",PASSWORD))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data");
+        String secret=created.path("secret").asText();
+        mvc.perform(post(BASE+"/service-tokens").header("X-Api-Key",secret)).andExpect(status().isOk());
+        mvc.perform(post(BASE+"/logout-all").header("Authorization","Bearer "+caller)).andExpect(status().isOk());
+        mvc.perform(post(BASE+"/service-tokens").header("X-Api-Key",secret)).andExpect(status().isUnauthorized());
+    }
 }

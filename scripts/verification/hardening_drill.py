@@ -69,14 +69,14 @@ try:
   keys('init','drill-1')
   auth,user,gateway=port(),port(),port()
   common=dict(JWT_ISSUER=f'http://localhost:{auth}',JWKS_URI=f'http://127.0.0.1:{auth}/.well-known/jwks.json',IDENTITY_SERVICE_URL=f'http://127.0.0.1:{auth}',IDENTITY_SERVICE_KEY=KEY,AUTH_PROXY_KEY=PROXY,AUDIT_LOG_PATH=str(temp/'audit'),SERVICE_BIND_ADDRESS='127.0.0.1')
-  authenv=dict(common,DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/authdb',AUTH_DB_USERNAME='auth_app',AUTH_APP_PASSWORD='auth-app-test',AUTH_MIGRATION_PASSWORD='auth-migr-test',MAIL_OUTBOX_ENCRYPTION_KEY='34'*32,LOGIN_IP_LIMIT='200',AUTH_IP_LIMIT='1000',REDIS_HOST='127.0.0.1',REDIS_PORT=str(redisport),JWT_KEY_SET=str(manifest),JWT_PRIVATE_KEY=str(private),JWT_PUBLIC_KEY=str(public),MAIL_SERVICE_URL=f'http://127.0.0.1:{mailport}',MAIL_SERVICE_API_KEY='p2-smoke-mail-key')
+  authenv=dict(common,USER_URL=f'http://127.0.0.1:{user}',DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/authdb',AUTH_DB_USERNAME='auth_app',AUTH_APP_PASSWORD='auth-app-test',AUTH_MIGRATION_PASSWORD='auth-migr-test',MAIL_OUTBOX_ENCRYPTION_KEY='34'*32,LOGIN_IP_LIMIT='200',AUTH_IP_LIMIT='1000',REDIS_HOST='127.0.0.1',REDIS_PORT=str(redisport),JWT_KEY_SET=str(manifest),JWT_PRIVATE_KEY=str(private),JWT_PUBLIC_KEY=str(public),MAIL_SERVICE_URL=f'http://127.0.0.1:{mailport}',MAIL_SERVICE_API_KEY='p2-smoke-mail-key')
   boot('mail-service',mailport,dict(MAIL_SERVICE_PORT=str(mailport),MAIL_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/maildb',MAIL_APP_PASSWORD='mail-app-test',MAIL_MIGRATION_PASSWORD='mail-migr-test',MAIL_SERVICE_API_KEY='p2-smoke-mail-key',SMTP_HOST='127.0.0.1',SMTP_PORT=str(mail.server_address[1]),EMAIL_FROM='Team <security@example.com>',SPRING_APPLICATION_JSON=json.dumps({'spring':{'mail':{'properties':{'mail.smtp.auth':False,'mail.smtp.starttls.enable':False,'mail.smtp.starttls.required':False}}}})),temp)
   authprocess=boot('auth-service',auth,authenv,temp)
   second=port();secondprocess=boot('auth-service',second,authenv,temp)
   boot('user-service',user,dict(common,USER_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/userdb',USER_DB_USERNAME='profiles_app',PROFILE_DB_PASSWORD='profile-test-password',PROFILE_APP_PASSWORD='profile-app-test'),temp)
   boot('api-gateway',gateway,dict(common,AUTH_URL=f'http://127.0.0.1:{auth}',USER_URL=f'http://127.0.0.1:{user}',GATEWAY_TRUSTED_PROXIES='127.0.0.1'),temp)
   base='/api/v1/auth'; pw='CurrentPassword123!'
-  for email in ['owner@example.com','admin@example.com']:
+  for email in ['owner@example.com','admin@example.com','managed@example.com']:
    call(gateway,base+'/register',{'email':email,'password':pw},expected=201)
    import re
    for attempt in range(200):
@@ -100,6 +100,52 @@ try:
   call(gateway,base+'/roles',token=a['accessToken'],method='GET',expected=403)
   docker('exec','-i',pg,'psql','-v','ON_ERROR_STOP=1','-U','auth','-d','authdb',stdin="BEGIN; INSERT INTO identity_user_roles(user_id,role_name) SELECT id,'ADMIN' FROM app_users WHERE email='admin@example.com'; UPDATE app_users SET credential_revision=credential_revision+1 WHERE email='admin@example.com'; COMMIT;")
   admin=call(gateway,base+'/login',{'email':'admin@example.com','password':pw})['data']
+  # Account access extension: actual service boundaries and durable PostgreSQL state.
+  managed=call(gateway,base+'/login',{'email':'managed@example.com','password':pw})['data']
+  managedId=call(gateway,'/api/v1/users/me',token=managed['accessToken'],method='GET')['data']['id']
+  call(gateway,'/api/v1/users/me',{'displayName':'Managed account','bio':'private export data'},managed['accessToken'],method='PATCH')
+  credential=call(gateway,base+'/api-keys',{'name':'drill-worker','scopes':['profile:read'],'expiresAt':'2099-01-01T00:00:00Z','currentPassword':pw},managed['accessToken'],expected=400)
+  import datetime
+  expiry=(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat()
+  credential=call(gateway,base+'/api-keys',{'name':'drill-worker','scopes':['profile:read'],'expiresAt':expiry,'currentPassword':pw},managed['accessToken'])['data']
+  machine=call(gateway,base+'/service-tokens',headers={'X-Api-Key':credential['secret']})['data']
+  call(gateway,'/api/v1/users/me',token=machine['accessToken'],method='GET')
+  call(user,'/api/v1/users/me',{'bio':'denied'},machine['accessToken'],method='PATCH',expected=403)
+  call(gateway,base+'/api-keys/'+credential['key']['id'],token=managed['accessToken'],method='DELETE')
+  call(user,'/api/v1/users/me',token=machine['accessToken'],method='GET',expected=401)
+  assert call(gateway,base+'/introspect',{'token':managed['refreshToken']},managed['accessToken'])['data']['active']
+  assert call(gateway,base+'/login-history?successful=true',token=managed['accessToken'],method='GET')['data']
+  found=call(gateway,base+'/users?q=managed',token=admin['accessToken'],method='GET')['data'];assert len(found)==1 and found[0]['id']==managedId
+  tenant=call(gateway,base+'/tenants',{'name':'Drill team','currentPassword':pw},admin['accessToken'])['data']['id']
+  call(gateway,base+'/tenants/'+tenant+'/members/'+managedId,{'currentPassword':pw},admin['accessToken'],method='PUT')
+  call(gateway,'/api/v1/users/'+managedId+'?tenantId='+tenant,token=admin['accessToken'],method='GET')
+  call(user,'/api/v1/users/'+managedId,token=admin['accessToken'],method='GET',expected=403)
+  call(user,'/api/v1/users/'+managedId+'?tenantId='+tenant,{'bio':'tenant-authorized update'},admin['accessToken'],method='PATCH')
+  call(gateway,base+'/tenants/'+tenant+'/members/'+managedId,{'currentPassword':pw},admin['accessToken'],method='DELETE')
+  call(user,'/api/v1/users/'+managedId+'?tenantId='+tenant,token=admin['accessToken'],method='GET',expected=403)
+  call(gateway,base+'/tenants/'+tenant,{'currentPassword':pw},admin['accessToken'],method='DELETE')
+  call(gateway,base+'/users/'+managedId+'/status',{'status':'SUSPENDED','currentPassword':pw},admin['accessToken'],method='PATCH')
+  call(user,'/api/v1/users/me',token=managed['accessToken'],method='GET',expected=401)
+  call(gateway,base+'/login',{'email':'managed@example.com','password':pw},expected=403)
+  call(gateway,base+'/users/'+managedId+'/status',{'status':'ENABLED','currentPassword':pw},admin['accessToken'],method='PATCH')
+  call(user,'/api/v1/users/me',token=managed['accessToken'],method='GET',expected=401)
+  managed=call(gateway,base+'/login',{'email':'managed@example.com','password':pw})['data']
+  device=call(gateway,base+'/devices',token=managed['accessToken'],method='GET')['data'][0]['id']
+  call(gateway,base+'/devices/'+device+'/trust',{'days':30,'currentPassword':pw},managed['accessToken'])
+  assert any(d['trusted'] for d in call(gateway,base+'/devices',token=managed['accessToken'],method='GET')['data'])
+  currentSession=call(gateway,base+'/session/current',token=managed['accessToken'],method='GET')['data'];assert currentSession['current']
+  stepup=call(gateway,base+'/reauthenticate',{'currentPassword':pw},managed['accessToken'])['data']['reauthenticationToken']
+  exported=call(gateway,'/api/v1/users/me/export',token=managed['accessToken'],method='GET',headers={'X-Reauthentication-Token':stepup})['data'];assert exported['profile']['bio']=='tenant-authorized update'
+  assert 'passwordHash' not in json.dumps(exported) and 'secret_hash' not in json.dumps(exported)
+  call(gateway,'/api/v1/users/me',{'currentPassword':pw},managed['accessToken'],method='DELETE',expected=202)
+  call(user,'/api/v1/users/me',token=managed['accessToken'],method='GET',expected=401)
+  for attempt in range(200):
+   deletion=call(gateway,base+'/users/'+managedId+'/deletion',token=admin['accessToken'],method='GET')['data']
+   if deletion['state']=='COMPLETED':break
+   time.sleep(.1)
+  assert deletion['state']=='COMPLETED','Cross-service account erasure did not complete'
+  call(user,'/internal/users/'+managedId+'/profile',method='GET',headers={'X-Identity-Service-Key':KEY},expected=404)
+  print('Account access drill passed: scoped machine JWT, live revocation, introspection, history, tenant/ownership policy, admin lock/unlock, trusted devices, export and cross-service deletion.')
   call(gateway,base+'/roles',{'name':'VIEWER','permissions':['profile:read','sessions:read'],'currentPassword':pw},admin['accessToken'])
   call(gateway,base+'/users/'+ownerId+'/roles',{'roles':['VIEWER'],'currentPassword':pw},admin['accessToken'],method='PUT')
   call(gateway,'/api/v1/users/me',token=a['accessToken'],method='GET',expected=401)
