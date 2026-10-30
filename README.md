@@ -8,6 +8,8 @@ Reliability fixes and rollout: [Six hardening improvements](docs/HARDENING_RELIA
 
 Account access extension: [Admin users, API keys, tenant policy, notifications, history, export and deletion](docs/ACCOUNT_ACCESS.md).
 
+P6 timeouts, circuit breakers, safe retries, durable delivery, probes and failure drills: [Resilience and distributed systems](docs/RESILIENCE_P6.md).
+
 P5 metrics, distributed tracing, correlated logs, dashboards and alerting: [Observability and monitoring](docs/OBSERVABILITY_P5.md).
 
 P4 automated tests, Testcontainers, OpenAPI contracts, coverage and security CI: [Testing and security verification](docs/TESTING_P4.md).

@@ -1,4 +1,4 @@
-name: Tests, security and observability
+name: Tests, security, observability and resilience
 on:
   push:
   pull_request:
@@ -109,3 +109,21 @@ jobs:
         with:
           name: observability-verification
           path: reports/observability/
+  resilience:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - run: mvn -B -DskipTests package
+      - name: P6 dependency failure and recovery drill
+        run: python3 scripts/verification/resilience_drill.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resilience-verification
+          path: reports/resilience/

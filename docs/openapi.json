@@ -319,6 +319,48 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "Upstream response unavailable; rotation outcome is unknown. Do not replay the refresh token. Reauthenticate.",
+            "headers": {
+              "X-Refresh-Outcome": {
+                "description": "Rotation may already have committed.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "unknown"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream response unavailable; rotation outcome is unknown. Do not replay the refresh token. Reauthenticate.",
+            "headers": {
+              "X-Refresh-Outcome": {
+                "description": "Rotation may already have committed.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "unknown"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -330,7 +372,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Single-use refresh rotation. Never automatically retry after timeout or connection loss: rotation may have committed. Reauthenticate and revoke the old session. Gateway 502/504 reports X-Refresh-Outcome: unknown. Idempotency-Key does not make refresh replay safe."
       }
     },
     "/api/v1/auth/logout": {

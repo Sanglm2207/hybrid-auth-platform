@@ -73,7 +73,7 @@ try:
   boot('mail-service',mailport,dict(MAIL_SERVICE_PORT=str(mailport),MAIL_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/maildb',MAIL_APP_PASSWORD='mail-app-test',MAIL_MIGRATION_PASSWORD='mail-migr-test',MAIL_SERVICE_API_KEY='p2-smoke-mail-key',SMTP_HOST='127.0.0.1',SMTP_PORT=str(mail.server_address[1]),EMAIL_FROM='Team <security@example.com>',SPRING_APPLICATION_JSON=json.dumps({'spring':{'mail':{'properties':{'mail.smtp.auth':False,'mail.smtp.starttls.enable':False,'mail.smtp.starttls.required':False}}}})),temp)
   authprocess=boot('auth-service',auth,authenv,temp)
   second=port();secondprocess=boot('auth-service',second,authenv,temp)
-  boot('user-service',user,dict(common,USER_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/userdb',USER_DB_USERNAME='profiles_app',PROFILE_DB_PASSWORD='profile-test-password',PROFILE_APP_PASSWORD='profile-app-test'),temp)
+  userprocess=boot('user-service',user,dict(common,USER_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/userdb',USER_DB_USERNAME='profiles_app',PROFILE_DB_PASSWORD='profile-test-password',PROFILE_APP_PASSWORD='profile-app-test'),temp)
   boot('api-gateway',gateway,dict(common,AUTH_URL=f'http://127.0.0.1:{auth}',USER_URL=f'http://127.0.0.1:{user}',GATEWAY_TRUSTED_PROXIES='127.0.0.1'),temp)
   base='/api/v1/auth'; pw='CurrentPassword123!'
   for email in ['owner@example.com','admin@example.com','managed@example.com']:
@@ -188,6 +188,30 @@ try:
    docker('pause',redis)
    try:call(auth,base+'/login',{'email':'admin@example.com','password':pw},expected=503)
    finally:docker('unpause',redis)
+  if os.environ.get('P6_FAILURE_INJECTION') == 'true':
+   # Only isolated containers created above are paused. Liveness must remain UP.
+   for node in (auth,second,user,gateway,mailport):
+    call(node,'/actuator/health/liveness',method='GET')
+    call(node,'/actuator/health/readiness',method='GET')
+   for dependency,probe in ((redis,auth),(pg,user)):
+    docker('pause',dependency)
+    try:
+     start=time.monotonic()
+     call(probe,'/actuator/health/readiness',method='GET',expected=503)
+     assert time.monotonic()-start < 12, 'Readiness hung on paused dependency'
+     call(probe,'/actuator/health/liveness',method='GET')
+     call(auth,base+'/login',{'email':'admin@example.com','password':pw},expected=503)
+    finally:docker('unpause',dependency)
+    for attempt in range(100):
+     try:call(probe,'/actuator/health/readiness',method='GET');break
+     except (AssertionError,urllib.error.URLError):time.sleep(.2)
+    else:raise AssertionError('Readiness did not recover')
+   userprocess.terminate();userprocess.wait(timeout=35)
+   call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET',expected=502)
+   call(gateway,'/actuator/health/liveness',method='GET')
+   userprocess=boot('user-service',user,dict(common,USER_DB_URL=f'jdbc:postgresql://127.0.0.1:{pgport}/userdb',USER_DB_USERNAME='profiles_app',PROFILE_DB_PASSWORD='profile-test-password',PROFILE_APP_PASSWORD='profile-app-test'),temp)
+   call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET')
+   print('P6 failure injection passed: Redis/PostgreSQL readiness DOWN, liveness UP, bounded fail-closed login, recovery, User outage/restart.')
   # PostgreSQL enforces read-only transactions: explicitly exercise activity after the throttle interval.
   docker('exec',pg,'psql','-v','ON_ERROR_STOP=1','-U','auth','-d','authdb','-c',"UPDATE identity_sessions SET last_activity_at=CURRENT_TIMESTAMP-INTERVAL '60 seconds' WHERE revoked_at IS NULL")
   call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET')
