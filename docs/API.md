@@ -136,3 +136,9 @@ Add the matching dependency, implement `ApiCode` in a service-specific enum for 
 Application log helpers emit event, stable code, status/duration, exception class and traceId. They exclude raw request bodies, credentials, OTPs, tokens and provider exception messages. Auth DTO/token `toString()` methods redact sensitive values. Framework DEBUG/TRACE logging is separate and can expose request/exception contents; use normal application logging for credentials-bearing traffic.
 
 Last-admin removal returns `409 LAST_ADMINISTRATOR`. Mail delivery is asynchronous from Auth; a successful lifecycle response confirms durable enqueue. Internal Mail accepts a UUID `Idempotency-Key` and rejects different content under the same ID with 409. See [hardening operations](HARDENING_RELIABILITY.md).
+
+## Account access extension
+
+See [ACCOUNT_ACCESS.md](ACCOUNT_ACCESS.md) for the added admin/status, introspection, history, trusted-device, scoped API-key, tenant profile policy, export and deletion APIs. The executable [OpenAPI specification](openapi.json) covers these public endpoints.
+
+Canonical management endpoints use `/api/v1/auth`: `GET /users`, `PATCH /users/{id}/status`, `PUT /users/{id}/roles`, `GET/POST /roles`, `PUT /roles/{name}/permissions`, `POST /reauthenticate`, `GET /login-history`, `GET /session/current`. Self-service account endpoints are `DELETE /api/v1/users/me` and `GET /api/v1/users/me/export`. GET export requires `X-Reauthentication-Token` obtained from password reauthentication; DELETE still requires `currentPassword` in its JSON body. See the account-access guide for compatibility aliases and request schemas.

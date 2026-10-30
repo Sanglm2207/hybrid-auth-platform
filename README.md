@@ -6,6 +6,10 @@ API response schema, validation rules, error codes, Gateway allowlists, and shar
 
 Reliability fixes and rollout: [Six hardening improvements](docs/HARDENING_RELIABILITY.md).
 
+Account access extension: [Admin users, API keys, tenant policy, notifications, history, export and deletion](docs/ACCOUNT_ACCESS.md).
+
+P4 automated tests, Testcontainers, OpenAPI contracts, coverage and security CI: [Testing and security verification](docs/TESTING_P4.md).
+
 P2 sessions, devices, RBAC, User-owned profiles and deactivation: [Session and identity management](docs/SESSION_IDENTITY_P2.md).
 
 P1 account recovery, password/email changes, and signed email templates: [Account lifecycle](docs/ACCOUNT_LIFECYCLE_P1.md).

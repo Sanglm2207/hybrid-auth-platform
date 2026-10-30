@@ -1,5 +1,7 @@
 # P2 session and identity management
 
+The [account access extension](ACCOUNT_ACCESS.md) adds Auth V6–V7/User V2 migrations, action permissions, admin account status, introspection, trusted devices, history, machine credentials, tenant profile policy, export and a separate deletion workflow. Its current rules supersede the earlier limitations below.
+
 P2 adds active-session/device management, persisted roles and permissions, a separate User-owned profile database, and account deactivation. Auth owns identity/credentials/security state; User owns profile data. Neither service queries the other's database. The local PostgreSQL instance hosts two databases with different service credentials.
 
 ## API
