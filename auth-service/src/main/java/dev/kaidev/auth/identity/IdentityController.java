@@ -26,7 +26,7 @@ public class IdentityController {
         @Override public String toString() { return "RolesRequest[REDACTED]"; }
     }
     public record RoleRequest(@NotBlank @Pattern(regexp = "[A-Z][A-Z0-9_]{0,31}") String name,
-            @NotNull @Size(max = 8) Set<@NotBlank @Size(max = 64) String> permissions, @ValidPassword(min = 1) String currentPassword) {
+            @NotNull @Size(max = 32) Set<@NotBlank @Size(max = 64) String> permissions, @ValidPassword(min = 1) String currentPassword) {
         @Override public String toString() { return "RoleRequest[REDACTED]"; }
     }
     private final SessionService sessions;

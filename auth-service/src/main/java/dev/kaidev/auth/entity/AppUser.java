@@ -22,6 +22,8 @@ public class AppUser {
     @Column(nullable = false)
     public boolean active = true;
     public Instant deactivatedAt;
+    @Column(nullable=false) public boolean adminLocked;
+    public Instant deletedAt;
 
     @Column(nullable = false)
     public boolean emailVerified;
