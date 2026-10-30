@@ -31,8 +31,9 @@ public class AccessController {
     private final DeviceTrust trust;
     private final TokenIntrospection introspection;
     private final dev.kaidev.auth.service.SessionService sessions;
-    public AccessController(UserAdministration users,ServiceCredentials keys,LoginHistory history,DeviceTrust trust,TokenIntrospection introspection,dev.kaidev.auth.service.SessionService sessions){
-        this.users=users;this.keys=keys;this.history=history;this.trust=trust;this.introspection=introspection;this.sessions=sessions;
+    private final TenantPolicy tenants;
+    public AccessController(UserAdministration users,ServiceCredentials keys,LoginHistory history,DeviceTrust trust,TokenIntrospection introspection,dev.kaidev.auth.service.SessionService sessions,TenantPolicy tenants){
+        this.users=users;this.keys=keys;this.history=history;this.trust=trust;this.introspection=introspection;this.sessions=sessions;this.tenants=tenants;
     }
     @GetMapping("/users") @PreAuthorize("hasAuthority('users:read')")
     public ApiResponse<?> search(@RequestParam(defaultValue="")String q,@RequestParam(required=false)Boolean locked,
@@ -68,6 +69,15 @@ public class AccessController {
         return ok(sessions.list(owner(jwt),id).stream().filter(session->session.id().equals(id)).findFirst()
                 .orElseThrow(()->new dev.kaidev.common.exception.ApiException(CommonCode.NOT_FOUND)));
     }
+    @GetMapping("/tenants") public ApiResponse<?> tenants(@AuthenticationPrincipal Jwt jwt){return ok(tenants.list(owner(jwt)));}
+    @PostMapping("/tenants") @PreAuthorize("hasAuthority('tenants:manage')")
+    public ApiResponse<?> createTenant(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TenantRequest body){return ok(tenants.create(owner(jwt),body.name(),body.currentPassword()));}
+    @PutMapping("/tenants/{tenant}/members/{target}") @PreAuthorize("hasAuthority('tenants:manage')")
+    public ApiResponse<?> member(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenant,@PathVariable UUID target,@Valid @RequestBody Password body){tenants.membership(owner(jwt),tenant,target,true,body.currentPassword());return ok(null);}
+    @DeleteMapping("/tenants/{tenant}/members/{target}") @PreAuthorize("hasAuthority('tenants:manage')")
+    public ApiResponse<?> removeMember(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID tenant,@PathVariable UUID target,@Valid @RequestBody Password body){tenants.membership(owner(jwt),tenant,target,false,body.currentPassword());return ok(null);}
+    @DeleteMapping("/tenants/{id}") @PreAuthorize("hasAuthority('tenants:manage')")
+    public ApiResponse<?> removeTenant(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Password body){tenants.delete(owner(jwt),id,body.currentPassword());return ok(null);}
     private static UUID owner(Jwt jwt){return UUID.fromString(jwt.getSubject());}
     private static <T>ApiResponse<T> ok(T data){return ServletApi.success(CommonCode.OK,data);}
 }

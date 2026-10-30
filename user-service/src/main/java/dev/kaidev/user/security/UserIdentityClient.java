@@ -32,4 +32,15 @@ public class UserIdentityClient {
             return response.data();
         } catch (RestClientException e) { throw new ApiException(CommonCode.SERVICE_UNAVAILABLE); }
     }
+    public void authorizeProfile(IdentityCheck identity,java.util.UUID target,java.util.UUID tenant,String action,String trace){
+        if(key.length()<32)throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
+        var body=new java.util.HashMap<String,Object>();body.put("identity",identity);body.put("target",target);body.put("tenant",tenant);body.put("action",action);
+        try {
+            var response=client.post().uri("/internal/identity/authorize-profile").contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Identity-Service-Key",key).header("X-Request-Id",trace).body(body).retrieve()
+                    .body(new ParameterizedTypeReference<ApiResponse<java.util.Map<String,Boolean>>>(){});
+            if(response==null||!response.success()||response.data()==null||!response.data().containsKey("allowed"))throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);
+            if(!Boolean.TRUE.equals(response.data().get("allowed")))throw new ApiException(CommonCode.ACCESS_DENIED);
+        }catch(RestClientException e){throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);}
+    }
 }

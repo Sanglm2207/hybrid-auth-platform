@@ -29,6 +29,8 @@ public class GatewaySecurity {
                 .permitAll()
                 .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:read")
                 .pathMatchers(org.springframework.http.HttpMethod.PATCH, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:write")
+                .pathMatchers(org.springframework.http.HttpMethod.GET,"/api/v1/users/*").hasAnyAuthority("profile:read","users:read")
+                .pathMatchers(org.springframework.http.HttpMethod.PATCH,"/api/v1/users/*").hasAnyAuthority("profile:write","users:update")
                 .anyExchange().authenticated()).oauth2ResourceServer(x -> x.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
     }

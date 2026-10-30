@@ -25,6 +25,8 @@ public class UserSecurity {
                         a -> a.requestMatchers("/actuator/health", "/error").permitAll()
                             .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/users/me").hasAuthority("profile:read")
                             .requestMatchers(org.springframework.http.HttpMethod.PATCH, "/api/v1/users/me").hasAuthority("profile:write")
+                            .requestMatchers(org.springframework.http.HttpMethod.GET,"/api/v1/users/*").hasAnyAuthority("profile:read","users:read")
+                            .requestMatchers(org.springframework.http.HttpMethod.PATCH,"/api/v1/users/*").hasAnyAuthority("profile:write","users:update")
                             .anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint(errors).accessDeniedHandler(errors).jwt(j -> {
                 })).build();
