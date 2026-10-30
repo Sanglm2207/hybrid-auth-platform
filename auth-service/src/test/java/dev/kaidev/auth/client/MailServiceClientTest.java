@@ -31,10 +31,10 @@ class MailServiceClientTest {
     @AfterEach void cleanup() { MDC.clear(); server.verify(); }
 
     @Test void sendsTemplateRequestWithInternalKeyAndTrace() {
-        MDC.put("traceId", "12345678-1234-1234-1234-123456789abc");
+        MDC.put("correlationId", "12345678-1234-1234-1234-123456789abc");
         server.expect(requestTo("http://mail.test/api/v1/mail/send")).andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-Mail-Service-Key", "test-key"))
-                .andExpect(header("X-Request-Id", MDC.get("traceId")))
+                .andExpect(header("X-Request-Id", MDC.get("correlationId")))
                 .andExpect(content().json("""
                         {"to":"a@example.com","templateId":"email-verification","variables":{"otp":"123456","expiresInMinutes":"5"}}
                         """))

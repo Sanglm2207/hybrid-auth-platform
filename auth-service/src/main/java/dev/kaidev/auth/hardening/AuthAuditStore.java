@@ -16,7 +16,7 @@ public class AuthAuditStore {
     public void append(UUID actor,SecurityAudit.Event event,Map<String,?> details){
         var safe=SecurityAudit.safeDetails(details);
         UUID target=safe.containsKey("targetUserId")?UUID.fromString(safe.get("targetUserId").toString()):null;
-        String trace=MDC.get("traceId");try{if(trace!=null)trace=UUID.fromString(trace).toString();}catch(IllegalArgumentException e){trace=null;}
+        String trace=MDC.get("correlationId");try{if(trace!=null)trace=UUID.fromString(trace).toString();}catch(IllegalArgumentException e){trace=null;}
         try{jdbc.update("insert into security_audit_records(id,created_at,event,actor,target,details,trace_id) values(?,?,?,?,?,?,?)",UUID.randomUUID(),Timestamp.from(Instant.now()),event.name(),actor,target,json.writeValueAsString(safe),trace);}
         catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException("Audit serialization failed");}
     }

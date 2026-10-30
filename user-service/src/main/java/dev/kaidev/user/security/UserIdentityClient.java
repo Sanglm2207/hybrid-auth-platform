@@ -16,10 +16,12 @@ import org.springframework.web.client.*;
 public class UserIdentityClient {
     private final RestClient client;
     private final String key;
-    public UserIdentityClient(@Value("${app.identity.url}") String url, @Value("${app.identity.api-key:}") String key) {
+    public UserIdentityClient(String url,String key){this(url,key,RestClient.builder());}
+    @org.springframework.beans.factory.annotation.Autowired
+    public UserIdentityClient(@Value("${app.identity.url}") String url, @Value("${app.identity.api-key:}") String key,RestClient.Builder builder) {
         this.key = key;
         var factory = new SimpleClientHttpRequestFactory(); factory.setConnectTimeout(Duration.ofSeconds(2)); factory.setReadTimeout(Duration.ofSeconds(3));
-        client = RestClient.builder().baseUrl(url).requestFactory(factory).build();
+        client = builder.clone().baseUrl(url).requestFactory(factory).build();
     }
     public IdentityAccess check(IdentityCheck request, String trace) {
         if (key.length() < 32) throw new ApiException(CommonCode.SERVICE_UNAVAILABLE);

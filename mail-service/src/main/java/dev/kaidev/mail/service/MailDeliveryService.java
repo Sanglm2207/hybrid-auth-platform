@@ -45,7 +45,7 @@ public class MailDeliveryService {
             sender.send(message);
             ApiLog.event(org.slf4j.LoggerFactory.getLogger(MailDeliveryService.class), "mail.sent", MailCode.MAIL_SENT.name());
         } catch (MailException | MessagingException e) {
-            ApiLog.failure(MailCode.MAIL_DELIVERY_FAILED.name(), e, MDC.get("traceId"));
+            ApiLog.failure(MailCode.MAIL_DELIVERY_FAILED.name(), e, MDC.get("correlationId"));
             throw new ApiException(MailCode.MAIL_DELIVERY_FAILED);
         }
     }

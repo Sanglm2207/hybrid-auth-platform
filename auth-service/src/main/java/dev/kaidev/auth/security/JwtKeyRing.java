@@ -69,7 +69,7 @@ public class JwtKeyRing implements JwtEncoder {
         try { load(); }
         catch (Exception e) {
             // Never log the manifest, private material, path, or parse error contents.
-            SecurityAudit.record(SecurityAudit.Event.JWT_KEYS_RELOADED, SecurityAudit.Outcome.FAILURE, null, MDC.get("traceId"));
+            SecurityAudit.record(SecurityAudit.Event.JWT_KEYS_RELOADED, SecurityAudit.Outcome.FAILURE, null, MDC.get("correlationId"));
         }
     }
 
@@ -106,7 +106,7 @@ public class JwtKeyRing implements JwtEncoder {
         snapshot = new Snapshot(active, new JWKSet(set.getKeys().stream().map(JWK::toPublicJWK).toList()), digest);
         for (JWK entry : set.getKeys()) knownKeys.put(entry.getKeyID(), entry.toPublicJWK().toJSONString());
         retainUntil.entrySet().removeIf(e -> !e.getValue().isAfter(now));
-        SecurityAudit.record(SecurityAudit.Event.JWT_KEYS_RELOADED, SecurityAudit.Outcome.SUCCESS, null, MDC.get("traceId"));
+        SecurityAudit.record(SecurityAudit.Event.JWT_KEYS_RELOADED, SecurityAudit.Outcome.SUCCESS, null, MDC.get("correlationId"));
     }
 
     private static void validate(RSAKey key) throws Exception {

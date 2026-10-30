@@ -46,6 +46,9 @@ public final class SecurityAudit {
         record(event,outcome,actor,traceId,java.util.Map.of());
     }
     public static void record(Event event, Outcome outcome, String actor, String traceId, java.util.Map<String,?> details) {
+        dev.kaidev.common.observability.SecurityMetrics.audit(event,outcome);
+        dev.kaidev.common.observability.TelemetryLog.event("security."+event.name().toLowerCase(java.util.Locale.ROOT),traceId,
+                java.util.Map.of("outcome",outcome.name()));
         String safeActor = "anonymous";
         try {
             if (actor != null)

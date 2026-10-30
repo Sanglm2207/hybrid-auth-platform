@@ -13,9 +13,10 @@ import org.springframework.web.client.*;
 @Component
 public class ProfileDataClient {
     private final RestClient client;private final String key;
-    public ProfileDataClient(@Value("${app.user-service.url:http://127.0.0.1:8702}")String url,@Value("${app.identity.api-key:}")String key){
+    @org.springframework.beans.factory.annotation.Autowired
+    public ProfileDataClient(@Value("${app.user-service.url:http://127.0.0.1:8702}")String url,@Value("${app.identity.api-key:}")String key,RestClient.Builder builder){
         this.key=key;var factory=new SimpleClientHttpRequestFactory();factory.setConnectTimeout(Duration.ofSeconds(2));factory.setReadTimeout(Duration.ofSeconds(3));
-        client=RestClient.builder().baseUrl(url).requestFactory(factory).build();
+        client=builder.clone().baseUrl(url).requestFactory(factory).build();
     }
     public JsonNode export(UUID owner){
         configured();try {

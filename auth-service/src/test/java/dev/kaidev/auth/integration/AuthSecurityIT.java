@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real Flyway/PostgreSQL transactions, Redis Lua, JWT decoder and HTTP security chain. */
 @Testcontainers
-@SpringBootTest(properties = {"app.jwt.key-set=", "app.security.login-ip-limit=200",
+@SpringBootTest(properties = {"app.observability.session-poll-ms=3600000", "app.jwt.key-set=", "app.security.login-ip-limit=200",
         "app.security.auth-ip-limit=1000", "spring.flyway.locations=classpath:db/migration"})
 @AutoConfigureMockMvc
 class AuthSecurityIT {
@@ -163,5 +163,16 @@ class AuthSecurityIT {
         mvc.perform(post(BASE+"/service-tokens").header("X-Api-Key",secret)).andExpect(status().isOk());
         mvc.perform(post(BASE+"/logout-all").header("Authorization","Bearer "+caller)).andExpect(status().isOk());
         mvc.perform(post(BASE+"/service-tokens").header("X-Api-Key",secret)).andExpect(status().isUnauthorized());
+    }
+    @Autowired dev.kaidev.auth.hardening.SessionMetrics sessionMetrics;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+    @Test void activeSessionGaugeUsesSqlAndReflectsRevocation(){
+        sessionMetrics.refresh();double before=meters.get("auth.active.sessions").gauge().value();
+        try{
+            var one=login(owner);sessionMetrics.refresh();
+            assertThat(meters.get("auth.active.sessions").gauge().value()).isEqualTo(before+1);
+            mvc.perform(post(BASE+"/logout-all").header("Authorization","Bearer "+one.path("accessToken").asText())).andExpect(status().isOk());
+            sessionMetrics.refresh();assertThat(meters.get("auth.active.sessions").gauge().value()).isEqualTo(before);
+        }catch(Exception e){throw new RuntimeException(e);}
     }
 }

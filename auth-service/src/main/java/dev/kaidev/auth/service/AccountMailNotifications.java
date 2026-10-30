@@ -28,6 +28,6 @@ public class AccountMailNotifications {
     }
     @TransactionalEventListener
     public void audit(CommittedAudit event) {
-        SecurityAudit.record(event.event(), SecurityAudit.Outcome.SUCCESS, event.userId().toString(), MDC.get("traceId"),event.details());
+        SecurityAudit.record(event.event(), SecurityAudit.Outcome.SUCCESS, event.userId().toString(), MDC.get("correlationId"),event.details());
     }
 }

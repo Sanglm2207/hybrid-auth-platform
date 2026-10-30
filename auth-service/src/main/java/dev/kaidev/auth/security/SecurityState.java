@@ -28,7 +28,7 @@ public class SecurityState {
 
     public String get(String key) {
         try { return redis.opsForValue().get(key); }
-        catch (DataAccessException e) { throw unavailable(); }
+        catch (DataAccessException e) { throw unavailable(e); }
     }
 
     public java.util.Set<String> sessionIds(String key) {
@@ -36,7 +36,7 @@ public class SecurityState {
             var result = redis.opsForZSet().rangeByScore(key, System.currentTimeMillis(), Double.POSITIVE_INFINITY, 0, 100);
             if (result == null) throw unavailable();
             return result;
-        } catch (DataAccessException e) { throw unavailable(); }
+        } catch (DataAccessException e) { throw unavailable(e); }
     }
 
     public long increment(String key) {
@@ -44,7 +44,7 @@ public class SecurityState {
             Long value = redis.opsForValue().increment(key);
             if (value == null) throw unavailable();
             return value;
-        } catch (DataAccessException e) { throw unavailable(); }
+        } catch (DataAccessException e) { throw unavailable(e); }
     }
 
     public long execute(DefaultRedisScript<Long> script, List<String> keys, String... args) {
@@ -52,7 +52,7 @@ public class SecurityState {
             Long result = redis.execute(script, keys, (Object[]) args);
             if (result == null) throw unavailable();
             return result;
-        } catch (DataAccessException e) { throw unavailable(); }
+        } catch (DataAccessException e) { throw unavailable(e); }
     }
 
     public static DefaultRedisScript<Long> script(String name) {
@@ -62,8 +62,13 @@ public class SecurityState {
         return script;
     }
 
+    private static ApiException unavailable(Throwable error) {
+        boolean connection=error instanceof org.springframework.data.redis.RedisConnectionFailureException||error instanceof org.springframework.dao.QueryTimeoutException;
+        dev.kaidev.common.observability.SecurityMetrics.redisFailure(connection);
+        return unavailable();
+    }
     private static ApiException unavailable() {
-        SecurityAudit.record(SecurityAudit.Event.SECURITY_STATE_FAILURE, SecurityAudit.Outcome.UNAVAILABLE, null, MDC.get("traceId"));
+        SecurityAudit.record(SecurityAudit.Event.SECURITY_STATE_FAILURE, SecurityAudit.Outcome.UNAVAILABLE, null, MDC.get("correlationId"));
         return new ApiException(AuthCode.SECURITY_UNAVAILABLE);
     }
 }

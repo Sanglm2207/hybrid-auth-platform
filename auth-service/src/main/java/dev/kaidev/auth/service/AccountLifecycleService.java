@@ -128,7 +128,7 @@ public class AccountLifecycleService {
         if (!passwords.matches(password, user.passwordHash)) {
             long retry = protection.failed(user.email);
             SecurityAudit.record(SecurityAudit.Event.AUTHENTICATION_FAILURE, SecurityAudit.Outcome.DENIED,
-                    user.id.toString(), MDC.get("traceId"));
+                    user.id.toString(), MDC.get("correlationId"));
             if (retry > 0) throw new TemporaryLockException(retry);
             throw new ApiException(AuthCode.INVALID_CREDENTIALS);
         }
@@ -166,7 +166,7 @@ public class AccountLifecycleService {
         try { mail.send(to, template, variables); }
         catch (ApiException e) {
             SecurityAudit.record(SecurityAudit.Event.ACCOUNT_MAIL_FAILURE, SecurityAudit.Outcome.FAILURE,
-                    user.id.toString(), MDC.get("traceId"));
+                    user.id.toString(), MDC.get("correlationId"));
             throw e;
         }
     }

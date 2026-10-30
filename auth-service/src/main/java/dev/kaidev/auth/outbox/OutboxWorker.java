@@ -16,9 +16,9 @@ public class OutboxWorker {
     public OutboxWorker(AuthOutbox outbox,AccountLifecycleService accounts,MailServiceClient mail,@Value("${app.outbox.worker-enabled:true}") boolean enabled){this.outbox=outbox;this.accounts=accounts;this.mail=mail;this.enabled=enabled;}
     @Scheduled(fixedDelayString="${app.outbox.poll-ms:1000}") public void tick(){if(enabled)for(int i=0;i<20&&processNext();i++){} }
     public boolean processNext(){
-        var job=outbox.claim();if(job==null)return false;String previous=MDC.get("traceId");
+        var job=outbox.claim();if(job==null)return false;String previous=MDC.get("correlationId");
         try{
-            if(job.trace()!=null)MDC.put("traceId",job.trace());
+            if(job.trace()!=null)MDC.put("correlationId",job.trace());
             if(!Instant.now().isBefore(job.expires())){outbox.complete(job,"EXPIRED");return true;}
             var payload=outbox.payload(job);
             if(job.kind().equals("RECOVERY"))accounts.forgotPassword(payload.path("email").asText());
@@ -28,7 +28,7 @@ public class OutboxWorker {
             }
             outbox.complete(job,"SENT");
         }catch(RuntimeException e){outbox.retry(job);SecurityAudit.record(SecurityAudit.Event.ACCOUNT_MAIL_FAILURE,SecurityAudit.Outcome.FAILURE,null,job.trace());}
-        finally{if(previous==null)MDC.remove("traceId");else MDC.put("traceId",previous);}
+        finally{if(previous==null)MDC.remove("correlationId");else MDC.put("correlationId",previous);}
         return true;
     }
 }

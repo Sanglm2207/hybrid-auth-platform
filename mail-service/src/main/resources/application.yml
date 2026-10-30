@@ -2,6 +2,8 @@ server:
   address: ${MAIL_BIND_ADDRESS:127.0.0.1}
   port: ${MAIL_SERVICE_PORT:8703}
 spring:
+  config:
+    import: classpath:observability.yml
   flyway:
     user: ${MAIL_MIGRATION_USERNAME:mailer_migrator}
     password: ${MAIL_MIGRATION_PASSWORD:mailmigrdev}

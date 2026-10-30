@@ -15,14 +15,16 @@ public class ServletTraceFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String trace = ServletApi.traceId(request);
-        String previous = MDC.get("traceId");
-        MDC.put("traceId", trace);
+        String previous = MDC.get("correlationId");
+        MDC.put("correlationId", trace);
         response.setHeader(RequestTrace.HEADER, trace);
         long started = System.nanoTime();
         try { chain.doFilter(request, response); }
         finally {
+            if("POST".equals(request.getMethod())&&(request.getContextPath()+"/api/v1/auth/login").equals(request.getRequestURI()))
+                dev.kaidev.common.observability.SecurityMetrics.login(response.getStatus());
             ApiLog.completed(request.getMethod(), response.getStatus(), (System.nanoTime() - started) / 1_000_000, trace);
-            if (previous == null) MDC.remove("traceId"); else MDC.put("traceId", previous);
+            if (previous == null) MDC.remove("correlationId"); else MDC.put("correlationId", previous);
         }
     }
 }

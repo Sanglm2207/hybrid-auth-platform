@@ -71,6 +71,6 @@ public class LoginService {
         return new TemporaryLockException(retryMs);
     }
     private static void audit(SecurityAudit.Event event, SecurityAudit.Outcome outcome, String actor) {
-        SecurityAudit.record(event, outcome, actor, MDC.get("traceId"));
+        SecurityAudit.record(event, outcome, actor, MDC.get("correlationId"));
     }
 }

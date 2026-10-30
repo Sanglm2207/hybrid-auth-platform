@@ -21,7 +21,10 @@ public class GatewayIdentityFilter implements WebFilter {
     private final String key;
     private final ObjectMapper mapper;
     public GatewayIdentityFilter(String url, String key, ObjectMapper mapper) {
-        client = WebClient.builder().baseUrl(url).build(); this.key = key; this.mapper = mapper;
+        this(url,key,mapper,WebClient.builder());
+    }
+    public GatewayIdentityFilter(String url,String key,ObjectMapper mapper,WebClient.Builder builder){
+        client = builder.clone().baseUrl(url).build(); this.key = key; this.mapper = mapper;
     }
     @Override public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         return exchange.getPrincipal().ofType(JwtAuthenticationToken.class).map(Optional::of).defaultIfEmpty(Optional.empty()).flatMap(auth -> {

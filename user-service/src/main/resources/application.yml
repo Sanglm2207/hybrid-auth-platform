@@ -2,6 +2,8 @@ server:
   address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8702
 spring:
+  config:
+    import: classpath:observability.yml
   flyway:
     user: ${PROFILE_MIGRATION_USERNAME:profiles}
     password: ${PROFILE_DB_PASSWORD:profiledev}

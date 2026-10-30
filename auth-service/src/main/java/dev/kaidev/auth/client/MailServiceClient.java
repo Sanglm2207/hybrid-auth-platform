@@ -40,7 +40,7 @@ public class MailServiceClient {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Mail-Service-Key", apiKey).header("Idempotency-Key",deliveryId.toString())
                     .headers(headers -> {
-                        String traceId = MDC.get("traceId");
+                        String traceId = MDC.get("correlationId");
                         if (traceId != null) headers.set(RequestTrace.HEADER, traceId);
                     })
                     .body(new MailRequest(to, templateId, variables))
@@ -49,7 +49,7 @@ public class MailServiceClient {
                 throw new ApiException(AuthCode.EMAIL_DELIVERY_FAILED);
         } catch (RestClientException e) {
             // Provider responses, request variables, credentials and OTPs must stay out of logs and API errors.
-            ApiLog.failure(AuthCode.EMAIL_DELIVERY_FAILED.name(), e, MDC.get("traceId"));
+            ApiLog.failure(AuthCode.EMAIL_DELIVERY_FAILED.name(), e, MDC.get("correlationId"));
             throw new ApiException(AuthCode.EMAIL_DELIVERY_FAILED);
         }
     }

@@ -22,7 +22,7 @@ public class AuthOutbox {
     private UUID enqueue(String kind,Object payload,long ttl){try{
         UUID id=UUID.randomUUID();Instant now=Instant.now();String encrypted=crypto.encrypt(kind+":"+id,json.writeValueAsString(payload));
         jdbc.update("insert into auth_outbox(id,kind,encrypted_payload,trace_id,state,attempts,created_at,available_at,expires_at) values(?,?,?,?,?,0,?,?,?)",
-                id,kind,encrypted,MDC.get("traceId"),"PENDING",Timestamp.from(now),Timestamp.from(now),Timestamp.from(now.plusSeconds(ttl)));return id;
+                id,kind,encrypted,MDC.get("correlationId"),"PENDING",Timestamp.from(now),Timestamp.from(now),Timestamp.from(now.plusSeconds(ttl)));return id;
     }catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException("Outbox serialization failed");}
     catch(org.springframework.dao.DataAccessException e){throw new dev.kaidev.common.exception.ApiException(dev.kaidev.auth.constant.AuthCode.SECURITY_UNAVAILABLE);}}
     @Transactional(propagation=Propagation.REQUIRES_NEW)

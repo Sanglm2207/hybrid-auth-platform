@@ -169,7 +169,7 @@ public class SessionService {
 
     @org.springframework.transaction.annotation.Transactional
     public void revokeSession(UUID owner, UUID family) {
-        if (ledger != null) { ledger.revoke(owner, family); SecurityAudit.record(SecurityAudit.Event.SESSION_REVOKED, SecurityAudit.Outcome.SUCCESS, owner.toString(),MDC.get("traceId"),Map.of("targetUserId",owner,"sessionId",family)); return; }
+        if (ledger != null) { ledger.revoke(owner, family); SecurityAudit.record(SecurityAudit.Event.SESSION_REVOKED, SecurityAudit.Outcome.SUCCESS, owner.toString(),MDC.get("correlationId"),Map.of("targetUserId",owner,"sessionId",family)); return; }
         long result = state.execute(REVOKE_ID, List.of(familyKey(family.toString()), sessionKey(family.toString()),
                 indexKey(owner.toString()), versionKey(owner.toString())), owner.toString(), family.toString());
         if (result != 1) throw new ApiException(AuthCode.SESSION_NOT_FOUND);
@@ -208,7 +208,7 @@ public class SessionService {
         if (!user.emailVerified) throw new ApiException(AuthCode.EMAIL_NOT_VERIFIED);
     }
     private static void audit(SecurityAudit.Event event, SecurityAudit.Outcome outcome, String actor) {
-        SecurityAudit.record(event, outcome, actor, MDC.get("traceId"));
+        SecurityAudit.record(event, outcome, actor, MDC.get("correlationId"));
     }
     private String generation(String user) { String value = state.get(versionKey(user)); return value == null ? "0" : value; }
     private String tokenKey(String hash) { return state.key("token:" + hash); }

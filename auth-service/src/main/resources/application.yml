@@ -3,6 +3,8 @@ server:
   address: ${SERVICE_BIND_ADDRESS:127.0.0.1}
   port: 8701
 spring:
+  config:
+    import: classpath:observability.yml
   flyway:
     user: ${AUTH_MIGRATION_USERNAME:auth_migrator}
     password: ${AUTH_MIGRATION_PASSWORD:authmigrdev}

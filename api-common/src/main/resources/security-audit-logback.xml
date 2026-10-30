@@ -1,6 +1,6 @@
 <included>
   <appender name="SECURITY_AUDIT" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${AUDIT_LOG_PATH:-logs/security-audit}/${springAppName:-application}.jsonl</file>
+    <file>${AUDIT_LOG_PATH:-logs/security-audit}/${springAppName:-application}.${SERVER_PORT:-default}.jsonl</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
       <fileNamePattern>${AUDIT_LOG_PATH:-logs/security-audit}/${springAppName:-application}.%d{yyyy-MM-dd}.%i.jsonl.gz</fileNamePattern>
       <maxFileSize>10MB</maxFileSize><maxHistory>90</maxHistory><totalSizeCap>1GB</totalSizeCap>
@@ -10,4 +10,13 @@
   <logger name="security.audit" level="INFO" additivity="false">
     <appender-ref ref="SECURITY_AUDIT"/><appender-ref ref="CONSOLE"/>
   </logger>
+  <appender name="TELEMETRY_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${TELEMETRY_LOG_PATH:-logs/telemetry}/${springAppName:-application}.${SERVER_PORT:-default}.jsonl</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>${TELEMETRY_LOG_PATH:-logs/telemetry}/${springAppName:-application}.${SERVER_PORT:-default}.%d{yyyy-MM-dd}.%i.jsonl</fileNamePattern>
+      <maxFileSize>10MB</maxFileSize><maxHistory>7</maxHistory><totalSizeCap>256MB</totalSizeCap>
+    </rollingPolicy>
+    <encoder><pattern>%msg%n</pattern></encoder>
+  </appender>
+  <logger name="observability.events" level="INFO" additivity="false"><appender-ref ref="TELEMETRY_JSON"/></logger>
 </included>

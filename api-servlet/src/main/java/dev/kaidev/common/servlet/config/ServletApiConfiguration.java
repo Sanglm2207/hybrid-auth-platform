@@ -36,11 +36,19 @@ public class ServletApiConfiguration {
                             .maxNestingDepth(20).maxStringLength(4096).maxNumberLength(128).build());
                 });
     }
+    @Bean org.springframework.boot.web.client.RestClientCustomizer correlationRestClientCustomizer(){
+        return builder->builder.requestInterceptor((request,body,execution)->{
+            String id=org.slf4j.MDC.get("correlationId");
+            if(id!=null&&!request.getHeaders().containsKey(dev.kaidev.common.trace.RequestTrace.HEADER))
+                request.getHeaders().set(dev.kaidev.common.trace.RequestTrace.HEADER,id);
+            return execution.execute(request,body);
+        });
+    }
     @Bean ServletExceptionHandler servletExceptionHandler() { return new ServletExceptionHandler(); }
     @Bean ServletSecurityErrors servletSecurityErrors(ObjectMapper mapper) { return new ServletSecurityErrors(mapper); }
     @Bean FilterRegistrationBean<ServletTraceFilter> servletTraceFilter() {
         FilterRegistrationBean<ServletTraceFilter> bean = new FilterRegistrationBean<>(new ServletTraceFilter());
-        bean.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        bean.setOrder(Ordered.HIGHEST_PRECEDENCE + 5);
         return bean;
     }
     @Bean @ConditionalOnMissingBean(ErrorController.class)
