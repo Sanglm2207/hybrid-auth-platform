@@ -26,8 +26,9 @@ public class AccessController {
     public record TokenRequest(@NotBlank @Size(max=8192)String token){@Override public String toString(){return "TokenRequest[REDACTED]";}}
     public record TenantRequest(@NotBlank @Size(max=100)String name,@ValidPassword(min=1)String currentPassword){@Override public String toString(){return "TenantRequest[REDACTED]";}}
     private final UserAdministration users;
-    public AccessController(UserAdministration users){
-        this.users=users;
+    private final ServiceCredentials keys;
+    public AccessController(UserAdministration users,ServiceCredentials keys){
+        this.users=users;this.keys=keys;
     }
     @GetMapping("/users") @PreAuthorize("hasAuthority('users:read')")
     public ApiResponse<?> search(@RequestParam(defaultValue="")String q,@RequestParam(required=false)Boolean locked,
@@ -40,6 +41,14 @@ public class AccessController {
     }
     @PutMapping("/users/{id}/status") @PreAuthorize("hasAuthority('users:update')")
     public ApiResponse<?> status(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Status body){return ok(users.status(owner(jwt),id,body.locked(),body.active(),body.currentPassword()));}
+    @GetMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> keys(@AuthenticationPrincipal Jwt jwt){return ok(keys.list(owner(jwt)));}
+    @PostMapping("/api-keys") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> createKey(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody KeyRequest body){return ok(keys.create(owner(jwt),body.name(),body.scopes(),body.expiresAt(),body.currentPassword()));}
+    @DeleteMapping("/api-keys/{id}") @PreAuthorize("hasAuthority('keys:manage')")
+    public ApiResponse<?> revokeKey(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){keys.revoke(owner(jwt),id);return ok(null);}
+    @PostMapping("/service-tokens")
+    public ApiResponse<?> serviceToken(@RequestHeader("X-Api-Key")String secret){return ok(keys.exchange(secret));}
     private static UUID owner(Jwt jwt){return UUID.fromString(jwt.getSubject());}
     private static <T>ApiResponse<T> ok(T data){return ServletApi.success(CommonCode.OK,data);}
 }
