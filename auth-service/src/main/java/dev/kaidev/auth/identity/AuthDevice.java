@@ -14,5 +14,6 @@ public class AuthDevice {
     @Column(nullable = false, length = 64) public String lastIp;
     @Column(nullable = false) public Instant firstSeenAt;
     @Column(nullable = false) public Instant lastSeenAt;
+    public Instant trustExpiresAt;
     @Override public String toString() { return "AuthDevice[REDACTED]"; }
 }

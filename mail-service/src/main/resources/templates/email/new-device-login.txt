@@ -1,0 +1,4 @@
+New device sign-in
+Your account was signed in from a device we have not seen before. If this was not you, change your password and revoke unfamiliar sessions from your account security settings.
+
+{{signature}}

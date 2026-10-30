@@ -15,6 +15,7 @@ public class SecurityRetention {
         var now=Instant.now();
         jdbc.update("update auth_outbox set encrypted_payload='',state='EXPIRED',completed_at=? where expires_at<? and state in ('PENDING','FAILED')",Timestamp.from(now),Timestamp.from(now));
         jdbc.update("delete from auth_outbox where completed_at<?",Timestamp.from(now.minusSeconds(30L*86400)));
+        jdbc.update("delete from authentication_history where occurred_at<?",Timestamp.from(now.minusSeconds(30L*86400)));
         // Keep consumed refresh hashes for the entire family lifetime for replay detection.
         jdbc.update("delete from identity_sessions where expires_at<?",Timestamp.from(now.minusSeconds(86400)));
     }

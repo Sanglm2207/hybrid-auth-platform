@@ -59,7 +59,7 @@ class MailHttpContractTest {
         String json = mvc.perform(get("/api/v1/mail/templates").header(KEY, "test-mail-key"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var templates = mapper.readTree(json).path("data");
-        assertThat(templates.size()).isEqualTo(10);
+        assertThat(templates.size()).isEqualTo(11);
         for (var template : templates) {
             assertThat(template.path("variables").toString()).doesNotContain("signature");
             if (template.path("id").asText().equals("email-verification"))

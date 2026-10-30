@@ -27,8 +27,12 @@ public class AccessController {
     public record TenantRequest(@NotBlank @Size(max=100)String name,@ValidPassword(min=1)String currentPassword){@Override public String toString(){return "TenantRequest[REDACTED]";}}
     private final UserAdministration users;
     private final ServiceCredentials keys;
-    public AccessController(UserAdministration users,ServiceCredentials keys){
-        this.users=users;this.keys=keys;
+    private final LoginHistory history;
+    private final DeviceTrust trust;
+    private final TokenIntrospection introspection;
+    private final dev.kaidev.auth.service.SessionService sessions;
+    public AccessController(UserAdministration users,ServiceCredentials keys,LoginHistory history,DeviceTrust trust,TokenIntrospection introspection,dev.kaidev.auth.service.SessionService sessions){
+        this.users=users;this.keys=keys;this.history=history;this.trust=trust;this.introspection=introspection;this.sessions=sessions;
     }
     @GetMapping("/users") @PreAuthorize("hasAuthority('users:read')")
     public ApiResponse<?> search(@RequestParam(defaultValue="")String q,@RequestParam(required=false)Boolean locked,
@@ -49,6 +53,21 @@ public class AccessController {
     public ApiResponse<?> revokeKey(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id){keys.revoke(owner(jwt),id);return ok(null);}
     @PostMapping("/service-tokens")
     public ApiResponse<?> serviceToken(@RequestHeader("X-Api-Key")String secret){return ok(keys.exchange(secret));}
+    @GetMapping({"/login-history","/authentication-history"}) @PreAuthorize("hasAuthority('history:read')")
+    public ApiResponse<?> history(@AuthenticationPrincipal Jwt jwt,@RequestParam(required=false)Instant from,@RequestParam(required=false)Instant to,
+            @RequestParam(required=false)Boolean successful,@RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="20")int size){return ok(history.list(owner(jwt),from,to,successful,page,size));}
+    @PostMapping("/devices/{id}/trust") @PreAuthorize("hasAuthority('devices:trust')")
+    public ApiResponse<?> trust(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Trust body){trust.set(owner(jwt),id,body.days(),body.currentPassword());return ok(null);}
+    @DeleteMapping("/devices/{id}/trust") @PreAuthorize("hasAuthority('devices:trust')")
+    public ApiResponse<?> untrust(@AuthenticationPrincipal Jwt jwt,@PathVariable UUID id,@Valid @RequestBody Password body){trust.set(owner(jwt),id,0,body.currentPassword());return ok(null);}
+    @PostMapping("/introspect") @PreAuthorize("hasAuthority('tokens:introspect')")
+    public ApiResponse<?> introspect(@AuthenticationPrincipal Jwt jwt,@Valid @RequestBody TokenRequest body){return ok(introspection.inspect(owner(jwt),body.token()));}
+    @GetMapping("/session/current") @PreAuthorize("hasAuthority('sessions:read')")
+    public ApiResponse<?> currentSession(@AuthenticationPrincipal Jwt jwt){
+        UUID id=UUID.fromString(jwt.getClaimAsString("sid"));
+        return ok(sessions.list(owner(jwt),id).stream().filter(session->session.id().equals(id)).findFirst()
+                .orElseThrow(()->new dev.kaidev.common.exception.ApiException(CommonCode.NOT_FOUND)));
+    }
     private static UUID owner(Jwt jwt){return UUID.fromString(jwt.getSubject());}
     private static <T>ApiResponse<T> ok(T data){return ServletApi.success(CommonCode.OK,data);}
 }

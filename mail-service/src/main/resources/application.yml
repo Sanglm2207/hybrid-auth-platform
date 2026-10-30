@@ -71,6 +71,10 @@ app:
         subject: "Your account has been deactivated"
         html: classpath:templates/email/account-deactivated.html
         text: classpath:templates/email/account-deactivated.txt
+      new-device-login:
+        subject: "New device sign-in"
+        html: classpath:templates/email/new-device-login.html
+        text: classpath:templates/email/new-device-login.txt
       roles-changed:
         subject: "Your account access has changed"
         html: classpath:templates/email/roles-changed.html
