@@ -18,7 +18,7 @@ public class IdentityValidationService {
     @Transactional
     public IdentityAccess check(IdentityCheck request) {
         var user = users.findById(request.subject()).orElse(null);
-        if (user == null || !user.active || !user.emailVerified || request.credentialRevision() == null
+        if (user == null || !user.active || user.adminLocked || user.deletedAt!=null || !user.emailVerified || request.credentialRevision() == null
                 || user.credentialRevision != request.credentialRevision() || request.sessionVersion() == null
                 || !sessions.active(user.id, request.sessionId(), request.sessionVersion(), request.credentialRevision())) return IdentityAccess.denied();
         return new IdentityAccess(true, java.util.Set.copyOf(user.roles), roles.permissions(user.roles));

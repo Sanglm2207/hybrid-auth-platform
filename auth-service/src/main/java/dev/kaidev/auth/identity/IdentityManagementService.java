@@ -90,7 +90,7 @@ public class IdentityManagementService {
     }
     private AppUser lock(UUID id) { return users.findByIdForUpdate(id).orElseThrow(() -> new ApiException(CommonCode.NOT_FOUND)); }
     private void authenticate(AppUser user, String password) {
-        if (!user.active) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
+        if (!user.active || user.adminLocked || user.deletedAt!=null) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
         long retry = protection.lockedFor(user.email); if (retry > 0) throw new TemporaryLockException(retry);
         if (!passwords.matches(password, user.passwordHash)) {
             retry = protection.failed(user.email); if (retry > 0) throw new TemporaryLockException(retry);

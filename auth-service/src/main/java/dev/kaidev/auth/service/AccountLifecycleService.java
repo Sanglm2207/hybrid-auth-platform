@@ -42,7 +42,7 @@ public class AccountLifecycleService {
     @Transactional
     public void forgotPassword(String email) {
         AppUser user = users.findByEmailForUpdate(EmailAddress.normalize(email)).orElse(null);
-        if (user == null || !user.active) return;
+        if (user == null || (!user.active || user.adminLocked || user.deletedAt!=null)) return;
         Instant now = Instant.now();
         if (user.passwordResetResendAt != null && now.isBefore(user.passwordResetResendAt)) return;
         String token = issue(user, Purpose.RESET_PASSWORD, null, now);
@@ -122,7 +122,7 @@ public class AccountLifecycleService {
     }
 
     private void authenticate(AppUser user, String password) {
-        if (!user.active) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
+        if ((!user.active || user.adminLocked || user.deletedAt!=null)) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
         long locked = protection.lockedFor(user.email);
         if (locked > 0) throw new TemporaryLockException(locked);
         if (!passwords.matches(password, user.passwordHash)) {
@@ -147,7 +147,7 @@ public class AccountLifecycleService {
         AppUser user = users.findByIdForUpdate(userId).orElseThrow(AccountLifecycleService::invalidToken);
         // Load the entity only AFTER acquiring the user lock: don't reuse a pre-lock cached token snapshot.
         AccountActionToken token = tokens.findByTokenHash(hash).orElseThrow(AccountLifecycleService::invalidToken);
-        if (!user.active || token.purpose != purpose || token.consumedAt != null || !Instant.now().isBefore(token.expiresAt)
+        if ((!user.active || user.adminLocked || user.deletedAt!=null) || token.purpose != purpose || token.consumedAt != null || !Instant.now().isBefore(token.expiresAt)
                 || token.credentialRevision != user.credentialRevision) throw invalidToken();
         return new Resolved(user, token);
     }

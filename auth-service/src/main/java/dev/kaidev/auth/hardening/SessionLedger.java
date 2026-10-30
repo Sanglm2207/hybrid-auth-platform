@@ -46,7 +46,7 @@ public class SessionLedger {
     public void revokeAll(UUID user){var owner=users.findByIdForUpdate(user).orElseThrow();owner.sessionGeneration++;sessions.revokeAll(user,Instant.now());audit.append(user,dev.kaidev.common.security.SecurityAudit.Event.LOGOUT_ALL,Map.of("targetUserId",user));}
     public boolean active(UUID user,UUID family,long generation,long revision){
         var owner=users.findById(user).orElse(null);var s=sessions.findById(family).orElse(null);
-        boolean valid=owner!=null && owner.active && owner.emailVerified && owner.sessionGeneration==generation && owner.credentialRevision==revision
+        boolean valid=owner!=null && owner.active && !owner.adminLocked && owner.deletedAt==null && owner.emailVerified && owner.sessionGeneration==generation && owner.credentialRevision==revision
                 && s!=null && s.userId.equals(user) && s.generation==generation && s.credentialRevision==revision
                 && s.revokedAt==null && Instant.now().isBefore(s.expiresAt);
         Instant now=Instant.now();

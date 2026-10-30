@@ -80,7 +80,7 @@ public class SessionService {
             UUID owner = ledger.owner(hash);
             if (owner == null) return invalidRefresh(null);
             AppUser account = users.findByIdForUpdate(owner).orElse(null);
-            if (account == null || !account.active || !account.emailVerified) return invalidRefresh(null);
+            if (account == null || !account.active || account.adminLocked || account.deletedAt!=null || !account.emailVerified) return invalidRefresh(null);
             var status = ledger.inspect(account, hash);
             if (status == dev.kaidev.auth.hardening.SessionLedger.Rotation.USED) {
                 audit(SecurityAudit.Event.REFRESH_REUSE, SecurityAudit.Outcome.DENIED, owner.toString());
@@ -92,7 +92,7 @@ public class SessionService {
         String[] parts = parse(metadata);
         if (parts == null) return invalidRefresh(null);
         AppUser user = users.findByIdForUpdate(UUID.fromString(parts[0])).orElse(null);
-        if (user == null || !user.active || !user.emailVerified) return invalidRefresh(parts[0]);
+        if (user == null || !user.active || user.adminLocked || user.deletedAt!=null || !user.emailVerified) return invalidRefresh(parts[0]);
         String next = newRefresh(), nextHash = ClientIdentity.hash(next);
         // Sign before mutating Redis: a signing failure must not consume the client's token.
         SessionMetadata details = details(parts[1]);
@@ -204,7 +204,7 @@ public class SessionService {
         throw new ApiException(AuthCode.INVALID_REFRESH_TOKEN);
     }
     private static void requireVerified(AppUser user) {
-        if (!user.active) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
+        if (!user.active || user.adminLocked || user.deletedAt!=null) throw new ApiException(AuthCode.ACCOUNT_DISABLED);
         if (!user.emailVerified) throw new ApiException(AuthCode.EMAIL_NOT_VERIFIED);
     }
     private static void audit(SecurityAudit.Event event, SecurityAudit.Outcome outcome, String actor) {

@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface UserRepository extends JpaRepository<AppUser, UUID> {
     Optional<AppUser> findByEmail(String email);
+    @Query("select u from AppUser u where u.deletedAt is null and (locate(:q,lower(u.email))>0 or :q='') and (:locked is null or u.adminLocked=:locked) and (:active is null or u.active=:active)")
+    List<AppUser> search(@Param("q")String q,@Param("locked")Boolean locked,@Param("active")Boolean active,org.springframework.data.domain.Pageable page);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from AppUser u where u.id = :id")
