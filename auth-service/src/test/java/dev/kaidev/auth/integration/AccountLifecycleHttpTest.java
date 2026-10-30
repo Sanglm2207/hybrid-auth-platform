@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {"app.jwt.key-set=", "app.account.recovery-workers=1",
@@ -82,7 +83,24 @@ class AccountLifecycleHttpTest {
     }
     private String token(String template, String variable) {
         return mockingDetails(mail).getInvocations().stream().filter(i -> template.equals(i.getArgument(1))).reduce((a,b) -> b)
-                .map(i -> { Map<String,String> values = i.getArgument(2); return values.get(variable); }).orElseThrow();
+                .map(i -> { Map<String,String> values = i.getArgument(2); String link = values.get(variable);
+                    assertThat(link).startsWith("http://localhost:8700/api/v1/auth/").contains("#token=");
+                    return java.net.URI.create(link).getFragment().substring("token=".length()); }).orElseThrow();
+    }
+
+    @Test void publicPagesDoNotConsumeProofsOrChangeCredentials() throws Exception {
+        for (String path : List.of("/forgot-password", "/reset-password", "/confirm-email-change")) {
+            mvc.perform(get(BASE + path)).andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                    .andExpect(header().string("Cache-Control", "no-store"))
+                    .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                    .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.containsString("frame-ancestors 'none'")));
+        }
+        mvc.perform(get(BASE + "/account-actions.js")).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("history.replaceState")));
+        assertThat(users.findById(user.id).orElseThrow().email).isEqualTo(user.email);
+        assertThat(tokens.count()).isZero();
+        verifyNoInteractions(mail, sessions);
     }
 
     @Test void forgotResponsesAreUniformAndResetDoesNotAutoLogin() throws Exception {
@@ -91,9 +109,9 @@ class AccountLifecycleHttpTest {
                     .content(mapper.writeValueAsString(Map.of("email", email))))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("PASSWORD_RESET_REQUESTED"))
                     .andExpect(jsonPath("$.data").isEmpty()).andReturn().getResponse().getContentAsString();
-            assertThat(response).doesNotContain(email, "resetToken", "accessToken");
+            assertThat(response).doesNotContain(email, "resetUrl", "accessToken");
         }
-        drain(); String raw = token("password-reset", "resetToken");
+        drain(); String raw = token("password-reset", "resetUrl");
         String response = mvc.perform(post(BASE + "/reset-password").contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("token", raw, "newPassword", NEXT))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("PASSWORD_RESET"))
@@ -135,7 +153,7 @@ class AccountLifecycleHttpTest {
                 .content(mapper.writeValueAsString(Map.of("currentPassword", CURRENT, "newEmail", " NEW@EXAMPLE.COM "))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("EMAIL_CHANGE_REQUESTED"));
         assertThat(users.findById(user.id).orElseThrow().email).isEqualTo(user.email);
-        String raw = token("email-change-verification", "verificationToken");
+        String raw = token("email-change-verification", "verificationUrl");
         mvc.perform(post(BASE + "/confirm-email-change").contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("token", raw))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("EMAIL_CHANGED"));

@@ -24,7 +24,7 @@ public class GatewaySecurity {
             @Value("${app.identity.api-key:}") String identityKey) {
         return http.addFilterBefore(new dev.kaidev.gateway.filter.GatewayIdentityFilter(identityUrl, identityKey, mapper),
                 org.springframework.security.config.web.server.SecurityWebFiltersOrder.AUTHORIZATION).csrf(ServerHttpSecurity.CsrfSpec::disable).authorizeExchange(x -> x
-                .pathMatchers(ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
+                .pathMatchers(ApiPaths.AUTH_V1 + "/account-actions.js", ApiPaths.AUTH_V1 + "/register", ApiPaths.AUTH_V1 + "/resend-verification",
                         ApiPaths.AUTH_V1 + "/forgot-password", ApiPaths.AUTH_V1 + "/reset-password", ApiPaths.AUTH_V1 + "/confirm-email-change", ApiPaths.AUTH_V1 + "/verify-email", ApiPaths.AUTH_V1 + "/resend-otp", ApiPaths.AUTH_V1 + "/login", ApiPaths.AUTH_V1 + "/refresh", ApiPaths.AUTH_V1 + "/logout", "/actuator/health")
                 .permitAll()
                 .pathMatchers(org.springframework.http.HttpMethod.GET, ApiPaths.USERS_V1 + "/me").hasAuthority("profile:read")

@@ -38,9 +38,9 @@ Template catalog:
 | --- | --- | --- |
 | `email-verification` | `otp`, `expiresInMinutes` | Auth registration and resend OTP |
 | `welcome` | `displayName`, `appName` | None; available for future callers |
-| `password-reset` | `resetToken`, `expiresInMinutes` | Forgot-password worker |
+| `password-reset` | `resetUrl`, `expiresInMinutes` | Forgot-password worker |
 | `password-changed` | None | After committed password reset/change |
-| `email-change-verification` | `verificationToken`, `expiresInMinutes` | Pending email change, new inbox |
+| `email-change-verification` | `verificationUrl`, `expiresInMinutes` | Pending email change, new inbox |
 | `email-change-requested` | `newEmail` | Pending email change, current inbox |
 | `email-changed` | `newEmail` | Confirmed email change, old inbox |
 | `email-change-confirmed` | None | Confirmed email change, new inbox |

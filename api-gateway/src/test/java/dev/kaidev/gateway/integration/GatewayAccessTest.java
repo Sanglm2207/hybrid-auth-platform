@@ -105,6 +105,13 @@ class GatewayAccessTest {
         }
     }
 
+    @Test void accountActionPagesAndScriptReachAuthWithoutJwt() {
+        for (String path : new String[]{"/forgot-password", "/reset-password", "/confirm-email-change", "/account-actions.js"}) {
+            client.get().uri("/api/v1/auth" + path).exchange().expectStatus().isEqualTo(502)
+                    .expectBody().jsonPath("$.code").isEqualTo("UPSTREAM_UNAVAILABLE");
+        }
+    }
+
     @Test void allowedHostWithoutOriginCanRunHealthChecks() {
         client.get().uri("/actuator/health").exchange().expectStatus().isOk().expectBody().jsonPath("$.status").isEqualTo("UP");
     }

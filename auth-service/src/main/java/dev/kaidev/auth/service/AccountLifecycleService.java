@@ -1,6 +1,7 @@
 package dev.kaidev.auth.service;
 
 import dev.kaidev.auth.client.MailServiceClient;
+import dev.kaidev.auth.config.AccountActionLinks;
 import dev.kaidev.auth.constant.AuthCode;
 import dev.kaidev.auth.entity.*;
 import dev.kaidev.auth.entity.AccountActionToken.Purpose;
@@ -29,12 +30,13 @@ public class AccountLifecycleService {
     private final SessionService sessions;
     private final AbuseProtection protection;
     private final ApplicationEventPublisher events;
+    private final AccountActionLinks links;
     private final SecureRandom random = new SecureRandom();
 
     public AccountLifecycleService(UserRepository users, AccountActionTokenRepository tokens, PasswordEncoder passwords,
-            MailServiceClient mail, SessionService sessions, AbuseProtection protection, ApplicationEventPublisher events) {
+            MailServiceClient mail, SessionService sessions, AbuseProtection protection, ApplicationEventPublisher events, AccountActionLinks links) {
         this.users = users; this.tokens = tokens; this.passwords = passwords; this.mail = mail;
-        this.sessions = sessions; this.protection = protection; this.events = events;
+        this.sessions = sessions; this.protection = protection; this.events = events; this.links = links;
     }
 
     @Transactional
@@ -45,7 +47,7 @@ public class AccountLifecycleService {
         if (user.passwordResetResendAt != null && now.isBefore(user.passwordResetResendAt)) return;
         String token = issue(user, Purpose.RESET_PASSWORD, null, now);
         user.passwordResetResendAt = now.plusSeconds(60);
-        proofMail(user, user.email, "password-reset", Map.of("resetToken", token, "expiresInMinutes", "15"));
+        proofMail(user, user.email, "password-reset", Map.of("resetUrl", links.reset(token), "expiresInMinutes", "15"));
         auditAfterCommit(user, SecurityAudit.Event.PASSWORD_RESET_REQUESTED);
     }
 
@@ -82,7 +84,7 @@ public class AccountLifecycleService {
             throw new ApiException(AuthCode.ACCOUNT_ACTION_COOLDOWN);
         String token = issue(user, Purpose.CHANGE_EMAIL, newEmail, now);
         user.emailChangeResendAt = now.plusSeconds(60);
-        proofMail(user, newEmail, "email-change-verification", Map.of("verificationToken", token, "expiresInMinutes", "15"));
+        proofMail(user, newEmail, "email-change-verification", Map.of("verificationUrl", links.confirmEmail(token), "expiresInMinutes", "15"));
         notice(user, user.email, "email-change-requested", Map.of("newEmail", newEmail));
         auditAfterCommit(user, SecurityAudit.Event.EMAIL_CHANGE_REQUESTED);
     }

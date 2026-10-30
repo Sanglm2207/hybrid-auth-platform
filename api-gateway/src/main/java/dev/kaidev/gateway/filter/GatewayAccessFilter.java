@@ -54,7 +54,7 @@ public class GatewayAccessFilter implements WebFilter, Ordered {
         if (origins.size() > 1 || (!origins.isEmpty() && !properties.allowedOrigins().contains(origins.getFirst()))
                 || (origins.isEmpty() && properties.requireOrigin()
                         && !(exchange.getRequest().getMethod() == HttpMethod.GET
-                        && exchange.getRequest().getPath().value().equals("/actuator/health"))))
+                        && publicNavigation(exchange.getRequest().getPath().value()))))
             return reject(exchange, CommonCode.ORIGIN_NOT_ALLOWED);
 
         if (!processor.process(cors, exchange)) return reject(exchange, CommonCode.CORS_REJECTED);
@@ -66,4 +66,9 @@ public class GatewayAccessFilter implements WebFilter, Ordered {
     }
 
     private Mono<Void> reject(ServerWebExchange exchange, CommonCode code) { return ReactiveApi.failure(exchange, mapper, code); }
+
+    private boolean publicNavigation(String path) {
+        return java.util.Set.of("/actuator/health", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password",
+                "/api/v1/auth/confirm-email-change", "/api/v1/auth/account-actions.js").contains(path);
+    }
 }

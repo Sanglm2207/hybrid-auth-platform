@@ -9,7 +9,7 @@ app:
   gateway:
     trusted-proxies: ${GATEWAY_TRUSTED_PROXIES:}
     allowed-hosts: ${GATEWAY_ALLOWED_HOSTS:localhost,127.0.0.1,[::1]}
-    allowed-origins: ${GATEWAY_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origins: ${ACCOUNT_PUBLIC_BASE_URL:http://localhost:8700},${GATEWAY_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
     require-origin: ${GATEWAY_REQUIRE_ORIGIN:false}
   issuer: ${JWT_ISSUER:http://localhost:8701}
   jwks-uri: ${JWKS_URI:http://localhost:8701/.well-known/jwks.json}

@@ -161,11 +161,11 @@ class MailHttpContractTest {
 
     @Test void everyLifecycleTemplateRendersSignedHtmlAndTextWithoutCallerSignatureOverride() throws Exception {
         Map<String, Map<String, String>> examples = Map.of(
-                "password-reset", Map.of("resetToken", "a".repeat(43), "expiresInMinutes", "15"),
+                "password-reset", Map.of("resetUrl", "https://app.example.com/api/v1/auth/reset-password#token=" + "a".repeat(43), "expiresInMinutes", "15"),
                 "password-changed", Map.of(),
                 "account-deactivated", Map.of(),
                 "roles-changed", Map.of(),
-                "email-change-verification", Map.of("verificationToken", "b".repeat(43), "expiresInMinutes", "15"),
+                "email-change-verification", Map.of("verificationUrl", "https://app.example.com/api/v1/auth/confirm-email-change#token=" + "b".repeat(43), "expiresInMinutes", "15"),
                 "email-change-requested", Map.of("newEmail", "new@example.com"),
                 "email-changed", Map.of("newEmail", "new@example.com"),
                 "email-change-confirmed", Map.of());
@@ -181,6 +181,27 @@ class MailHttpContractTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"variables\":{\"signature\":\"Fake sender\"}}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("TEMPLATE_VARIABLES_INVALID"));
         verify(sender, never()).send(any(MimeMessage.class));
+    }
+
+    @Test void actionEmailsRenderButtonsAndRejectUnsafeLinkSchemes() throws Exception {
+        for (String template : java.util.List.of("password-reset", "email-change-verification")) {
+            String variable = template.equals("password-reset") ? "resetUrl" : "verificationUrl";
+            String link = "https://accounts.example.com/action#token=" + "a".repeat(43);
+            var result = mvc.perform(post("/api/v1/mail/templates/" + template + "/preview").header(KEY, "test-mail-key")
+                    .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("variables",
+                            Map.of(variable, link, "expiresInMinutes", "15")))))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            var rendered = mapper.readTree(result).path("data");
+            assertThat(rendered.path("html").asText()).contains("href=\"" + link + "\"")
+                    .doesNotContain("one-time token", "reset token", "font-family:monospace");
+            assertThat(rendered.path("text").asText()).contains(link).doesNotContain("one-time token");
+            for (String unsafe : java.util.List.of("javascript:alert(1)", "data:text/html,bad", "//evil.example.com", "http://evil.example.com")) {
+                mvc.perform(post("/api/v1/mail/templates/" + template + "/preview").header(KEY, "test-mail-key")
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("variables",
+                                Map.of(variable, unsafe, "expiresInMinutes", "15")))))
+                        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("TEMPLATE_VARIABLES_INVALID"));
+            }
+        }
     }
 
     @Test void smtpErrorsNeverExposeProviderDetailsOrOtp() throws Exception {

@@ -29,6 +29,8 @@ spring:
         jwt:
           issuer-uri: ${JWT_ISSUER:http://localhost:8701}
 app:
+  account:
+    public-base-url: ${ACCOUNT_PUBLIC_BASE_URL:http://localhost:8700}
   outbox:
     encryption-key: ${MAIL_OUTBOX_ENCRYPTION_KEY:}
   identity:

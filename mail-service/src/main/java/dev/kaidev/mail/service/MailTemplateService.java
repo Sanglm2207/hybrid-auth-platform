@@ -69,6 +69,10 @@ public class MailTemplateService {
                 || variables.values().stream().anyMatch(v -> v == null || v.isBlank() || v.length() > 4096))
             throw new ApiException(MailCode.TEMPLATE_VARIABLES_INVALID);
         Map<String, String> context = new HashMap<>(variables);
+        for (String key : List.of("resetUrl", "verificationUrl")) {
+            if (variables.containsKey(key) && !safeActionUrl(variables.get(key)))
+                throw new ApiException(MailCode.TEMPLATE_VARIABLES_INVALID);
+        }
         context.put("signature", signature);
         String subject = substitute(template.subject(), context, false);
         if (subject.contains("\r") || subject.contains("\n"))
@@ -82,5 +86,14 @@ public class MailTemplateService {
             String value = variables.get(match.group(1));
             return java.util.regex.Matcher.quoteReplacement(html ? HtmlUtils.htmlEscape(value, "UTF-8") : value);
         });
+    }
+
+    private static boolean safeActionUrl(String value) {
+        try {
+            var uri = java.net.URI.create(value);
+            boolean local = Set.of("localhost", "127.0.0.1", "[::1]").contains(uri.getHost() == null ? "" : uri.getHost());
+            return uri.getHost() != null && uri.getRawUserInfo() == null
+                    && ("https".equals(uri.getScheme()) || (local && "http".equals(uri.getScheme())));
+        } catch (IllegalArgumentException e) { return false; }
     }
 }

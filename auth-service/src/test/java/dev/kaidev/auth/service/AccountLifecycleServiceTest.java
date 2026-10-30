@@ -25,7 +25,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @DataJpaTest
-@Import({AccountLifecycleService.class, AccountMailNotifications.class, LoginService.class, AccountLifecycleServiceTest.Config.class})
+@Import({dev.kaidev.auth.config.AccountActionLinks.class, AccountLifecycleService.class, AccountMailNotifications.class, LoginService.class, AccountLifecycleServiceTest.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class AccountLifecycleServiceTest {
     private static final String CURRENT = "CurrentPassword123!", NEXT = "NextPassword456!";
@@ -52,12 +52,14 @@ class AccountLifecycleServiceTest {
     private String sentToken(String template, String variable) {
         return mockingDetails(mail).getInvocations().stream().filter(i -> i.getMethod().getName().equals("send")
                 && template.equals(i.getArgument(1))).reduce((a, b) -> b)
-                .map(i -> { Map<String, String> values = i.getArgument(2); return values.get(variable); }).orElseThrow();
+                .map(i -> { Map<String, String> values = i.getArgument(2); String link = values.get(variable);
+                    assertThat(link).startsWith("http://localhost:8700/api/v1/auth/").contains("#token=");
+                    return java.net.URI.create(link).getFragment().substring("token=".length()); }).orElseThrow();
     }
-    private String resetToken() { service.forgotPassword(user.email); return sentToken("password-reset", "resetToken"); }
+    private String resetToken() { service.forgotPassword(user.email); return sentToken("password-reset", "resetUrl"); }
     private String changeEmailToken(String email) {
         service.changeEmail(user.id, CURRENT, email);
-        return sentToken("email-change-verification", "verificationToken");
+        return sentToken("email-change-verification", "verificationUrl");
     }
     private void expireCooldowns() {
         var current = fresh(); current.passwordResetResendAt = Instant.now().minusSeconds(1);

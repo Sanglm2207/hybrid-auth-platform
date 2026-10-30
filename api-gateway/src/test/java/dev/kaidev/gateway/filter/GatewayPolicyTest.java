@@ -35,6 +35,18 @@ class GatewayPolicyTest {
         assertThat(forwarded).isTrue();
     }
 
+    @Test void strictOriginAllowsEmailNavigationButStillProtectsMutationPosts() {
+        for (String path : List.of("/forgot-password", "/reset-password", "/confirm-email-change", "/account-actions.js")) {
+            var get = MockServerWebExchange.from(MockServerHttpRequest.get("http://localhost/api/v1/auth" + path).header("Host", "localhost"));
+            AtomicBoolean forwarded = new AtomicBoolean();
+            filter(true).filter(get, ignored -> { forwarded.set(true); return Mono.empty(); }).block();
+            assertThat(forwarded).isTrue();
+            var post = MockServerWebExchange.from(MockServerHttpRequest.post("http://localhost/api/v1/auth" + path).header("Host", "localhost"));
+            filter(true).filter(post, ignored -> Mono.empty()).block();
+            assertThat(post.getResponse().getStatusCode().value()).isEqualTo(403);
+        }
+    }
+
     @Test void localIpv6HostIsAllowed() {
         var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("http://[::1]/actuator/health").header("Host", "[::1]"));
         AtomicBoolean forwarded = new AtomicBoolean();

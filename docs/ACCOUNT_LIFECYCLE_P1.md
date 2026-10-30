@@ -14,7 +14,7 @@ P1 adds forgot/reset password, authenticated password changes, and email changes
 | `POST /reset-password` | Public: `token`, `newPassword` | `PASSWORD_RESET` |
 | `POST /change-password` | Bearer JWT: `currentPassword`, `newPassword` | `PASSWORD_CHANGED` |
 | `POST /change-email` | Bearer JWT: `currentPassword`, `newEmail` | `EMAIL_CHANGE_REQUESTED` |
-| `POST /confirm-email-change` | Public: `token` from the new email | `EMAIL_CHANGED` |
+| `POST /confirm-email-change` | Public: `token` submitted automatically by the confirmation page | `EMAIL_CHANGED` |
 
 All success responses are HTTP 200 with the shared envelope and `data: null`. No endpoint returns a reset/verification secret or signs the user in automatically. New passwords use the existing policy: at least 12 Unicode code points, at most 72 UTF-8 bytes. Current-password fields accept existing passwords up to the same byte limit. Unknown request fields, including a caller-supplied `userId`, are rejected. Protected changes derive the account from the verified JWT subject.
 
@@ -23,7 +23,7 @@ All success responses are HTTP 200 with the shared envelope and `data: null`. No
 1. Submit `{ "email": "owner@example.com" }` to `/forgot-password`.
 2. The HTTP request places work in a durable encrypted PostgreSQL outbox **before any account lookup or SMTP call** and returns the same generic response for known and unknown emails. Workers propagate the request trace ID. Storage failure returns a generic HTTP 503, independently of account existence.
 3. For an existing account outside its 60-second cooldown, a worker generates a 32-byte random opaque token, stores only its SHA-256 hash in PostgreSQL, and sends the `password-reset` template to the account email. Another accepted request after the cooldown replaces the old reset token. Unknown accounts and requests within cooldown send nothing. Delivery failures roll the token/cooldown transaction back and are recorded without changing the already returned public response.
-4. Submit `{ "token": "<token from email>", "newPassword": "<new password>" }` to `/reset-password` within 15 minutes.
+4. The email contains a **Reset password** button. Open it within 15 minutes, enter and confirm a new password, and submit. The hosted page automatically sends `{ "token": "<proof from link>", "newPassword": "<new password>" }` to `POST /reset-password`; the user never copies a token or calls an API. A public `GET /forgot-password` page also accepts recovery requests.
 5. Auth changes the BCrypt password hash, increments the credential revision, invalidates every pending reset/email-change token, clears temporary login lockout, and revokes all refresh sessions. The user must log in with the new password. Reset does not implicitly verify an unverified account email.
 6. After commit, the account receives the `password-changed` security notification. Passwords themselves are never included in email.
 
@@ -41,8 +41,8 @@ After the password changes, all refresh sessions and pending lifecycle tokens ar
 
 1. With a valid access JWT, submit `{ "currentPassword": "...", "newEmail": "new@example.com" }` to `/change-email`.
 2. Auth verifies the password, normalizes the address, and rejects the current address (`EMAIL_UNCHANGED`, HTTP 400) or an already registered address (`EMAIL_EXISTS`, HTTP 409).
-3. The current account email stays active. A new single-use, 15-minute opaque token is sent to the **new** inbox using `email-change-verification`. The current inbox receives `email-change-requested` after the pending-change transaction commits.
-4. Submit `{ "token": "<token from new inbox>" }` to `/confirm-email-change`. This endpoint is public because the one-time secret proves new-inbox ownership; the request cannot choose an account or target address.
+3. The current account email stays active. A **Confirm email address** button is sent to the **new** inbox using `email-change-verification`. Its link contains a single-use proof valid for 15 minutes. The current inbox receives `email-change-requested` after the pending-change transaction commits.
+4. Open the email button, then explicitly click **Confirm email address** on the hosted page. The page automatically submits the proof to `POST /confirm-email-change`. Opening or scanning the link alone never changes the account. This endpoint is public because the one-time proof establishes new-inbox ownership; the request cannot choose an account or target address.
 5. Auth rechecks address availability and the token's purpose, expiry, use state, and credential revision. Only then does it change and verify the account email, clear old OTP state, invalidate all pending lifecycle tokens, and revoke all refresh sessions.
 6. The old inbox receives `email-changed`; the new inbox receives `email-change-confirmed`. Future logins use the new address and the existing password.
 
@@ -76,16 +76,22 @@ Signature values are escaped in HTML, must be nonblank single-line text of at mo
 | --- | --- | --- |
 | `email-verification` | `otp`, `expiresInMinutes` | Existing registration/resend verification |
 | `welcome` | `displayName`, `appName` | Available to internal callers; not automatic |
-| `password-reset` | `resetToken`, `expiresInMinutes` | Account inbox, recovery request |
+| `password-reset` | `resetUrl`, `expiresInMinutes` | Account inbox, recovery request |
 | `password-changed` | None | Account inbox, committed reset/change |
-| `email-change-verification` | `verificationToken`, `expiresInMinutes` | New inbox, pending email change |
+| `email-change-verification` | `verificationUrl`, `expiresInMinutes` | New inbox, pending email change |
 | `email-change-requested` | `newEmail` | Current inbox, pending-change notification |
 | `email-changed` | `newEmail` | Old inbox, committed change |
 | `email-change-confirmed` | None | New inbox, committed change |
 
 The signature is a configured sender footer, not a cryptographic email signature. SMTP-domain DKIM/SPF/DMARC configuration belongs to the sending provider/deployment.
 
-Templates show copyable opaque tokens for these API-based flows; this repository does not add a frontend reset/confirmation page or construct links from incoming Host headers. Add a fixed, trusted frontend URL and proper URL-context encoding if introducing clickable links later.
+Action emails contain buttons in HTML and full links in the plain-text alternative. Public pages are hosted at `GET /api/v1/auth/forgot-password`, `/reset-password`, and `/confirm-email-change`. They show success, validation, expired/used-link, and connection-error messages. Reset requires password confirmation; email change requires an explicit confirmation click. Completed changes direct users back to their app to sign in.
+
+Configure `ACCOUNT_PUBLIC_BASE_URL` in Auth and Gateway to the exact public origin serving the gateway (default `http://localhost:8700`, e.g. `https://accounts.example.com` in production). Only HTTPS origins are accepted except HTTP loopback for local development; do not include a path, query, fragment, or credentials. Links never use incoming Host/forwarded headers. Configure the corresponding hostname in `GATEWAY_ALLOWED_HOSTS`. Gateway includes this public origin alongside `GATEWAY_ALLOWED_ORIGINS`; origin enforcement still applies to form POSTs. Public page/script GET requests allow normal email navigation without an Origin header even with `GATEWAY_REQUIRE_ORIGIN=true`.
+
+Proofs travel in URL fragments (`#token=...`), are removed from browser history on page initialization, and remain only in page memory until submission. They are never placed in HTTP URL queries, access logs, browser storage, visible form fields, or external assets. Reloading a page requires reopening the email link. Pages use `no-store`, `no-referrer`, and a restrictive CSP. Backend proof hashing, expiry, replacement and session revocation remain unchanged; existing POST API contracts are preserved.
+
+Deploy Auth, Gateway, and Mail together because the two mail templates now require `resetUrl` / `verificationUrl` instead of raw proof variables. Request fresh action emails after upgrading; already queued legacy template payloads use the old variables.
 
 Proof and notice jobs must be enqueued in the account SQL transaction before commit. Enqueue failure rolls the mutation back; SMTP failure afterward retries through the outbox. Delivery IDs are stable across retries and Mail keeps successful receipts.
 
@@ -93,6 +99,7 @@ Proof and notice jobs must be enqueued in the account SQL transaction before com
 
 | Setting | Default |
 | --- | --- |
+| `ACCOUNT_PUBLIC_BASE_URL` | `http://localhost:8700`; public HTTPS gateway origin in production |
 | `MAIL_SIGNATURE` | `Hybrid Auth Security Team` |
 | `MAIL_OUTBOX_ENCRYPTION_KEY` | Generated AES-256 key; retain across restarts |
 | `app.outbox.poll-ms` | 1000 |
@@ -101,6 +108,6 @@ Proof and notice jobs must be enqueued in the account SQL transaction before com
 
 P0 IP throttling still applies to these POST endpoints. Audit events include `PASSWORD_RESET_REQUESTED`, `PASSWORD_RESET`, `PASSWORD_CHANGED`, `EMAIL_CHANGE_REQUESTED`, `EMAIL_CHANGED`, `ACCOUNT_MAIL_FAILURE`, and `ACCOUNT_RECOVERY_FAILURE`, without emails/passwords/tokens in their payloads.
 
-Restart Auth, Gateway, and Mail to apply the new endpoints/templates; Auth runs the schema migration automatically. V5 requires a new login for SQL session ledgers; OTP verification contracts are retained. Run `mvn verify` for token lifetime/purpose/replay/concurrency, rollback, session ordering, HTTP authorization, queue dispatch, and signed HTML/text template tests.
+Restart Auth, Gateway, and Mail to apply the new endpoints/templates; Auth runs the schema migration automatically. V5 requires a new login for SQL session ledgers; OTP verification contracts are retained. Run `mvn verify` for token lifetime/purpose/replay/concurrency, rollback, session ordering, HTTP authorization, queue dispatch, and signed HTML/text template tests. Run `node --test auth-service/src/test/js/account-actions.test.cjs` for page behavior: explicit confirmation, password confirmation/length, automatic proof submission, expired links, duplicate submission and network errors.
 
 References: [OWASP password recovery](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) and [OWASP reauthentication for sensitive changes](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html).
