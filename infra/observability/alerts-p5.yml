@@ -1,0 +1,51 @@
+groups:
+  - name: hybrid-p5
+    rules:
+      - alert: HybridHighHttpErrorRate
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / clamp_min(sum by (application) (rate(http_server_requests_seconds_count[5m])), 0.001) > 0.05 and on(application) sum by(application) (increase(http_server_requests_seconds_count[5m])) >= 20
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'HTTP 5xx above 5% for {{ $labels.application }}'
+      - alert: HybridHighLoginFailureRate
+        expr: sum(rate(auth_login_attempts_total{outcome!="success"}[5m])) / clamp_min(sum(rate(auth_login_attempts_total[5m])), 0.001) > 0.25 and sum(increase(auth_login_attempts_total[5m])) >= 20
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Login failure/error rate above 25%'
+      - alert: HybridRefreshTokenReplay
+        expr: sum(increase(auth_refresh_reuse_detected_total[5m])) > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Consumed refresh token replay detected'
+      - alert: HybridRedisConnectionFailures
+        expr: sum(increase(auth_redis_connection_failures_total[5m])) > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Redis security operations failed to connect or timed out'
+      - alert: HybridHighP99Latency
+        expr: histogram_quantile(0.99, sum by(application,le) (rate(http_server_requests_seconds_bucket[5m]))) > 2 and on(application) sum by(application) (increase(http_server_requests_seconds_count[5m])) >= 20
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: 'HTTP p99 above 2s for {{ $labels.application }}'
+      - alert: HybridCollectorUnavailable
+        expr: up{job="hybrid-otel"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'OpenTelemetry Collector metrics endpoint unavailable'
+      - alert: HybridServiceTelemetryMissing
+        expr: absent_over_time(process_uptime_seconds{application="auth-service"}[2m]) or absent_over_time(process_uptime_seconds{application="user-service"}[2m]) or absent_over_time(process_uptime_seconds{application="api-gateway"}[2m]) or absent_over_time(process_uptime_seconds{application="mail-service"}[2m])
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: 'Expected service telemetry absent: {{ $labels.application }}'
+      - alert: HybridSessionSnapshotUnavailable
+        expr: auth_active_sessions_available == 0
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Authoritative session count could not be read'

@@ -53,6 +53,7 @@ api-common / dev.kaidev.common
 │   └── response/       Response envelope and field errors
 ├── exception/          Reusable business exception
 ├── logging/            Structured application log helpers
+├── observability/      Bounded security metrics and correlated telemetry JSONL
 ├── security/           Safe JSON audit events and signed client identity helpers
 ├── trace/              Request ID handling
 ├── util/               Normalization helpers
@@ -87,3 +88,5 @@ P1 lifecycle tokens use `AccountActionToken`, `AccountActionTokenRepository`, an
 Auth keeps V1–V7 migrations in `auth-service`; User keeps independent profile V1–V2 migrations in `user-service`. V6 adds account access state, V7 adds reauthentication proofs and User V2 adds deletion tombstones. `infra/postgres/init-user-db.sql` provisions the local User database; `scripts/grant-admin.sh` is an explicit operator bootstrap. See [Session and identity management](SESSION_IDENTITY_P2.md).
 
 `hardening/` contains SQL session/replay ledgers, the last-administrator guard, transactional audit storage and retention. Mail owns its V1 delivery receipts in `maildb`; scoped Flyway callbacks grant each runtime role only service table access. `scripts/audit-collector.py` merges audit files; `scripts/verification/` contains isolated failure/load/SMTP drills. See [six reliability fixes](HARDENING_RELIABILITY.md).
+
+P5 shares exporter/histogram settings through `api-common/src/main/resources/observability.yml`. `infra/observability/` provisions Collector, Prometheus/Alertmanager, Loki, Tempo and Grafana; `compose.observability.yaml` runs the optional stack. See [P5](OBSERVABILITY_P5.md).

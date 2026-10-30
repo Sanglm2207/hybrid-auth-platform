@@ -94,7 +94,7 @@ try:
   listed=call(gateway,base+'/sessions',token=a['accessToken'],method='GET')['data']; assert len(listed)==2
   assert next(s for s in listed if s['deviceId']==deviceA)['ip']=='198.51.100.9', 'Trusted ingress IP was not propagated securely'
   assert len(call(gateway,base+'/devices',token=a['accessToken'],method='GET')['data'])==2
-  profile=call(gateway,'/api/v1/users/me',token=a['accessToken'],method='GET')['data']; ownerId=profile['id']
+  profile=call(gateway,'/api/v1/users/me',token=a['accessToken'],method='GET',headers={'X-Request-Id':os.environ['P5_PROBE_ID']} if os.environ.get('P5_PROBE_ID') else None)['data']; ownerId=profile['id']
   call(gateway,'/api/v1/users/me',{'displayName':'Kai','locale':'vi-VN','timeZone':'Asia/Ho_Chi_Minh'},a['accessToken'],method='PATCH')
   assert call(user,'/api/v1/users/me',token=a['accessToken'],method='GET')['data']['displayName']=='Kai'
   call(gateway,base+'/roles',token=a['accessToken'],method='GET',expected=403)
@@ -184,6 +184,10 @@ try:
    start=time.perf_counter();call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET');return (time.perf_counter()-start)*1000
   with ThreadPoolExecutor(max_workers=8) as pool:latencies=sorted(pool.map(request_latency,range(80)))
   print(json.dumps({'requests':80,'concurrency':8,'errors':0,'p50_ms':round(statistics.median(latencies),2),'p95_ms':round(latencies[75],2)}))
+  if os.environ.get('P5_PROBE_ID'):
+   docker('pause',redis)
+   try:call(auth,base+'/login',{'email':'admin@example.com','password':pw},expected=503)
+   finally:docker('unpause',redis)
   # PostgreSQL enforces read-only transactions: explicitly exercise activity after the throttle interval.
   docker('exec',pg,'psql','-v','ON_ERROR_STOP=1','-U','auth','-d','authdb','-c',"UPDATE identity_sessions SET last_activity_at=CURRENT_TIMESTAMP-INTERVAL '60 seconds' WHERE revoked_at IS NULL")
   call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET')

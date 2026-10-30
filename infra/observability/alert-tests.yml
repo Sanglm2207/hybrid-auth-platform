@@ -1,0 +1,43 @@
+rule_files: [alerts-p5.yml]
+evaluation_interval: 1m
+tests:
+  - name: high HTTP error rate fires after hold period
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="auth-service",status="200"}'
+        values: '0+40x12'
+      - series: 'http_server_requests_seconds_count{application="auth-service",status="500"}'
+        values: '0+10x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HybridHighHttpErrorRate
+        exp_alerts:
+          - exp_labels: {application: auth-service, severity: critical}
+            exp_annotations: {summary: 'HTTP 5xx above 5% for auth-service'}
+  - name: low traffic does not produce a noisy HTTP alert
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{application="user-service",status="500"}'
+        values: '0+1x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HybridHighHttpErrorRate
+        exp_alerts: []
+  - name: refresh replay and Redis timeout alert immediately
+    interval: 1m
+    input_series:
+      - series: auth_refresh_reuse_detected_total
+        values: '0 0 1 1 1 1 1'
+      - series: auth_redis_connection_failures_total
+        values: '0 0 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HybridRefreshTokenReplay
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: 'Consumed refresh token replay detected'}
+      - eval_time: 3m
+        alertname: HybridRedisConnectionFailures
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: 'Redis security operations failed to connect or timed out'}

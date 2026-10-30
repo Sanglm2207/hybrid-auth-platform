@@ -1,4 +1,4 @@
-name: P4 tests and security
+name: Tests, security and observability
 on:
   push:
   pull_request:
@@ -90,3 +90,22 @@ jobs:
         with:
           name: zap-reports
           path: reports/zap/
+  observability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Build service fixtures
+        run: mvn -B -DskipTests package
+      - name: Verify P5 metrics, logs, traces, dashboards and alert rules
+        run: python3 scripts/verification/observability_drill.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: observability-verification
+          path: reports/observability/

@@ -1,0 +1,99 @@
+extensions:
+  file_storage:
+    directory: /var/lib/otelcol
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+  filelog:
+    include:
+      - /var/log/hybrid/auth-service*.jsonl
+      - /var/log/hybrid/user-service*.jsonl
+      - /var/log/hybrid/mail-service*.jsonl
+      - /var/log/hybrid/api-gateway*.jsonl
+    start_at: beginning
+    storage: file_storage
+    include_file_path: true
+    operators:
+      - type: json_parser
+        parse_to: body
+        timestamp:
+          parse_from: body.timestamp
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.999999999Z07:00'
+      - type: regex_parser
+        parse_from: attributes["log.file.path"]
+        regex: '/(?P<service_name>auth-service|user-service|mail-service|api-gateway)(?:\..*)?\.jsonl$'
+      - type: move
+        from: attributes.service_name
+        to: resource["service.name"]
+      - type: trace_parser
+        if: 'body.trace_id != nil'
+        trace_id:
+          parse_from: body.trace_id
+        span_id:
+          parse_from: body.span_id
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 2s
+    send_batch_size: 512
+  attributes/privacy:
+    actions:
+      - {key: url.full, action: delete}
+      - {key: url.query, action: delete}
+      - {key: http.url, action: delete}
+      - {key: http.target, action: delete}
+      - {key: http.uri, action: delete}
+      - {key: db.statement, action: delete}
+      - {key: db.query.text, action: delete}
+  transform/exception_privacy:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_key(attributes, "exception.message")
+          - delete_key(attributes, "exception.stacktrace")
+      - context: spanevent
+        statements:
+          - delete_key(attributes, "exception.message")
+          - delete_key(attributes, "exception.stacktrace")
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    metric_expiration: 45s
+    resource_to_telemetry_conversion:
+      enabled: false
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
+    sending_queue:
+      storage: file_storage
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+    sending_queue:
+      storage: file_storage
+service:
+  extensions: [file_storage, health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/privacy, transform/exception_privacy, batch]
+      exporters: [otlphttp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [filelog, otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

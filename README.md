@@ -8,6 +8,8 @@ Reliability fixes and rollout: [Six hardening improvements](docs/HARDENING_RELIA
 
 Account access extension: [Admin users, API keys, tenant policy, notifications, history, export and deletion](docs/ACCOUNT_ACCESS.md).
 
+P5 metrics, distributed tracing, correlated logs, dashboards and alerting: [Observability and monitoring](docs/OBSERVABILITY_P5.md).
+
 P4 automated tests, Testcontainers, OpenAPI contracts, coverage and security CI: [Testing and security verification](docs/TESTING_P4.md).
 
 P2 sessions, devices, RBAC, User-owned profiles and deactivation: [Session and identity management](docs/SESSION_IDENTITY_P2.md).
@@ -79,18 +81,32 @@ flowchart TB
 
 SQL is authoritative for account state, session revocation and refresh replay history. Auth alone accesses Redis. Services exchange profile export/erasure and identity decisions through authenticated internal HTTP APIs, rather than reading another service's database. Auth reloads its key manifest every five seconds; Gateway and User receive only public keys.
 
-### Security audit and monitoring
+### Observability and security audit
 
 ```mermaid
 flowchart TB
-    events["Auth / Gateway / User<br/>Structured security events"]
-    files["Rolling JSONL files<br/>logs/security-audit/"]
-    collector["Audit collector :8710<br/>Durable SQLite cursors and deduplication<br/>Incident counters and security alerts"]
-    monitoring["Prometheus integration<br/>Scrape /metrics and evaluate alert rules<br/>Configure deployment receivers separately"]
-    events --> files
-    files -->|"Read / collect"| collector
-    collector -.->|"Metrics available for scraping"| monitoring
+    services["Gateway / Auth / User / Mail<br/>Actuator, Micrometer and W3C tracing"]
+    collector["OpenTelemetry Collector<br/>OTLP traces / metrics + structured JSONL logs"]
+    metrics["Prometheus<br/>HTTP p95 / p99, login outcomes<br/>Replay, Redis failures and SQL session counts"]
+    logs["Loki<br/>Request UUID + trace / span IDs"]
+    traces["Tempo<br/>Gateway to Auth / User HTTP spans"]
+    grafana["Grafana dashboards<br/>Linked metrics, logs and traces"]
+    alerts["Alertmanager<br/>Alert rules, grouping and silences"]
+    services --> collector
+    collector --> metrics
+    collector --> logs
+    collector --> traces
+    metrics ~~~ logs
+    logs ~~~ traces
+    metrics --> grafana
+    logs --> grafana
+    traces --> grafana
+    metrics --> alerts
 ```
+
+The optional local stack is defined in `compose.observability.yaml`; its ports bind to loopback. Grafana is on `:3001`. Enable exporters with `OBSERVABILITY_ENABLED=true` before starting the JVMs. See [P5 setup and verification](docs/OBSERVABILITY_P5.md). Alert delivery defaults to local UI until deployment receivers are configured.
+
+The existing durable SQL audit and rolling security JSONL remain independent. The Python audit collector can still retain cursors, deduplicate incidents and expose `:8710/metrics`; Loki receives a separate allowlisted stream without audit actor/details or arbitrary framework debug output.
 
 User owns `userdb` and persists profile fields by immutable Auth subject UUID. It never queries `authdb`; Auth never queries profile tables. User checks identity/session state through Auth HTTP, including when called directly. Auth alone accesses the security Redis state. Mail owns `maildb` for idempotency receipts. Its trusted HTML/text templates are version-controlled resources loaded at startup. Auth owns the encrypted durable mail outbox. Runtime database roles have DML access only and cannot connect across service databases.
 
