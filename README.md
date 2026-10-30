@@ -24,62 +24,83 @@ Source packages and folder responsibilities: [Project structure](docs/PROJECT_ST
 
 The system has four independently running Java services. The local runner starts them on the host; Docker Compose runs PostgreSQL and Redis with persistent volumes. Gateway is the client entry point. Auth, User, and Mail bind to loopback by default, and Mail has no public Gateway route.
 
+The diagrams use a **top-to-bottom layout**. Public endpoint labels below omit the common `/api/v1` prefix.
+
 ```mermaid
-flowchart LR
-    client["API client / frontend"]
+flowchart TB
+    client["Frontend / API client / service process"]
+    gateway["API Gateway :8700<br/>Host / origin / CORS policy<br/>JWT validation and live permissions"]
+    auth["Auth service :8701<br/>Accounts, action permissions and tenant policy<br/>Sessions, API keys and reauthentication"]
+    user["User service :8702<br/>Owned and tenant-authorized profiles<br/>Independent JWT / live-policy enforcement"]
+    mail["Mail service :8703 - internal<br/>HTML / text templates and managed signature<br/>Receipt deduplication / SMTP"]
+    smtp["SMTP provider"]
+    inbox["User inbox<br/>Verification, recovery and security notices"]
 
-    subgraph services["Java services on the host"]
-        gateway["API Gateway :8700<br/>Spring Cloud Gateway / WebFlux<br/>Host/origin policy, CORS, JWT validation<br/>Signed client-IP forwarding"]
-        auth["Auth service :8701<br/>Spring MVC<br/>Identity, RBAC, sessions/devices, deactivation<br/>Recovery workers and security controls"]
-        user["User service :8702<br/>Spring MVC<br/>JWT and live identity validation<br/>Owned profile GET/PATCH"]
-        mail["Mail service :8703 — internal<br/>Spring MVC / service API key<br/>HTML/text templates, signature, preview, SMTP"]
-    end
-
-    subgraph stores["Docker Compose — persistent volumes"]
-        postgres[("PostgreSQL / authdb — Auth owned<br/>Identity, roles, devices and credential revisions<br/>Session/replay ledger, encrypted outbox, audit<br/>Password, OTP and lifecycle token hashes")]
-        profiles[("PostgreSQL / userdb — User owned<br/>Profile fields and optimistic version<br/>Scoped profile runtime role")]
-        receipts[("PostgreSQL / maildb — Mail owned<br/>Idempotency receipts and request fingerprints")]
-        redis[("Redis :6379<br/>Refresh families and user generations<br/>Atomic rotation, rate counters, temporary locks")]
-    end
-
-    subgraph files["Local files"]
-        keys["Private JWK manifest<br/>Active signing kid and verification keys<br/>PEM compatibility fallback"]
-        audit["Rolling security audit JSONL<br/>logs/security-audit/<br/>Auth, Gateway and User files"]
-    end
-
-    smtp["External SMTP provider"]
-    inbox["Current / new user inbox"]
-
-    client -->|"HTTP /api/v1/**"| gateway
-    gateway -->|"/api/v1/auth/** + signed peer IP"| auth
-    gateway -->|"/api/v1/users/** + Bearer JWT"| user
-    gateway -.->|"Public JWKS + private live identity check"| auth
-    user -.->|"Public JWKS + private live identity check"| auth
-    keys -.->|"Auth reloads manifest every 5 seconds"| auth
-    auth -->|"JPA / Auth Flyway V1–V5"| postgres
-    user -->|"JPA / independent User Flyway V1"| profiles
-    auth -->|"Shared security state / atomic Lua"| redis
-    auth -->|"Outbox worker / HTTP + service key + idempotency ID"| mail
-    mail -->|"Mail Flyway V1 / scoped runtime role"| receipts
-    audit --> collector["Audit collector / durable SQLite<br/>Prometheus metrics and alert rules"]
-    mail -->|"UTF-8 HTML + text alternative over TLS"| smtp
-    smtp -->|"Verification, recovery and change notices"| inbox
-    gateway -->|"Security events"| audit
-    auth -->|"Security events"| audit
-    user -->|"Security events"| audit
+    client -->|"HTTP API / Bearer JWT"| gateway
+    gateway -->|"/auth/**<br/>GET /users/me/export<br/>DELETE /users/me"| auth
+    gateway -->|"Profile GET / PATCH<br/>/users/me and /users/{id}"| user
+    gateway -.->|"JWKS and private<br/>live identity check"| auth
+    user -.->|"Live identity / tenant policy<br/>Public JWKS"| auth
+    auth -->|"Profile export / erasure<br/>Internal service key"| user
+    auth -->|"Committed encrypted outbox<br/>Service key and Idempotency-Key"| mail
+    mail -->|"SMTP over TLS"| smtp
+    smtp --> inbox
 ```
 
-Solid arrows show request, data, or log writes; dotted arrows show key retrieval/reload and current identity checks. The three SQL databases share one local PostgreSQL instance on port 5432. Gateway and User fetch only public keys from Auth's `/.well-known/jwks.json`, then validate JWT signatures locally. Gateway and User also call Auth's private identity API to check active account/session versions and obtain current permissions. Auth signs with the active RSA key and validates with its public key ring. All three check issuer and the `hybrid-api` audience. Access JWTs use RS256 and a 15-minute lifetime; key rotation retains overlapping verification keys.
+Solid arrows show API or delivery requests; dotted arrows show public-key retrieval and private identity/authorization checks. Account export/deletion route to Auth before the general User route. Other profile requests route to User. Mail and `/internal/**` endpoints have no public Gateway route.
+
+Gateway and User fetch only public keys from Auth's `/.well-known/jwks.json`, validate JWT signatures locally, then ask Auth for current account/session state and permissions. Cross-user profile access additionally checks explicit tenant membership at Auth. Auth signs with the active RSA key from its reloadable private manifest. All JWT consumers check issuer and the `hybrid-api` audience. Human access tokens last 15 minutes; scoped machine tokens last at most five minutes and never outlive their API key.
+
+### Data ownership
+
+Each group below belongs to one service. The three SQL databases share one local PostgreSQL instance on port 5432; runtime credentials remain isolated. Docker Compose persists PostgreSQL and Redis, while key files stay on the host.
+
+```mermaid
+flowchart TB
+    subgraph auth_state["Auth-owned state"]
+        direction TB
+        keys["Private JWK manifest / PEM fallback<br/>Active signing key and overlapping verification keys"]
+        authdb[("PostgreSQL: authdb<br/>Flyway V1-V7<br/>Accounts, roles, permissions and tenants<br/>Session / refresh ledger and API-key hashes<br/>History, reauthentication proofs and deletion jobs<br/>Encrypted mail outbox and append-only audit")]
+        redis[("Redis :6379<br/>Atomic refresh rotation<br/>IP rate counters and temporary login locks")]
+        keys ~~~ authdb
+        authdb ~~~ redis
+    end
+    subgraph user_state["User-owned state"]
+        direction TB
+        userdb[("PostgreSQL: userdb<br/>Flyway V1-V2<br/>Profile fields and optimistic version<br/>Scrubbed deletion tombstones")]
+    end
+    subgraph mail_state["Mail-owned state"]
+        direction TB
+        maildb[("PostgreSQL: maildb<br/>Flyway V1<br/>Delivery receipts and request fingerprints")]
+    end
+    auth_state ~~~ user_state
+    user_state ~~~ mail_state
+```
+
+SQL is authoritative for account state, session revocation and refresh replay history. Auth alone accesses Redis. Services exchange profile export/erasure and identity decisions through authenticated internal HTTP APIs, rather than reading another service's database. Auth reloads its key manifest every five seconds; Gateway and User receive only public keys.
+
+### Security audit and monitoring
+
+```mermaid
+flowchart TB
+    events["Auth / Gateway / User<br/>Structured security events"]
+    files["Rolling JSONL files<br/>logs/security-audit/"]
+    collector["Audit collector :8710<br/>Durable SQLite cursors and deduplication<br/>Incident counters and security alerts"]
+    monitoring["Prometheus integration<br/>Scrape /metrics and evaluate alert rules<br/>Configure deployment receivers separately"]
+    events --> files
+    files -->|"Read / collect"| collector
+    collector -.->|"Metrics available for scraping"| monitoring
+```
 
 User owns `userdb` and persists profile fields by immutable Auth subject UUID. It never queries `authdb`; Auth never queries profile tables. User checks identity/session state through Auth HTTP, including when called directly. Auth alone accesses the security Redis state. Mail owns `maildb` for idempotency receipts. Its trusted HTML/text templates are version-controlled resources loaded at startup. Auth owns the encrypted durable mail outbox. Runtime database roles have DML access only and cannot connect across service databases.
 
 | Component | Responsibility and owned state |
 | --- | --- |
 | `api-gateway` | Route versioned APIs; enforce host/origin allowlists and CORS; validate JWTs on protected routes; replace caller identity headers with an HMAC proof of the client IP resolved through explicitly trusted ingress proxies. The shared `AUTH_PROXY_KEY` verifies forwarded IPs; a distinct `IDENTITY_SERVICE_KEY` protects live authorization checks. |
-| `auth-service` | Own users, registration OTPs, lifecycle proofs, credentials and session policy. Apply shared IP limits/temporary lockout; issue JWTs; atomically rotate/revoke refresh families; coordinate password/email changes and Mail calls. |
-| `user-service` | Own profile GET/PATCH, profile persistence/versioning and validation in `userdb`; verify JWTs and live Auth permissions before access. |
-| `mail-service` | Own SMTP credentials, sender address, ten HTML/text templates, required variables, managed `MAIL_SIGNATURE`, template preview, durable idempotency receipts and SMTP submission. Internal requests require `MAIL_SERVICE_API_KEY`. |
-| PostgreSQL | Persist users, BCrypt password/OTP hashes, verification state, credential revisions, cooldowns and SHA-256 hashes of reset/email-change proofs. Auth Flyway reaches V5 for durable sessions, encrypted outbox and audit; User and Mail independently run V1 in their databases. |
+| `auth-service` | Own accounts, action permissions, tenants, credentials, session policy, API keys, trusted devices and login history. Enforce administrative status and reauthentication; coordinate export/erasure through User and encrypted notification jobs through Mail. |
+| `user-service` | Own profile fields/versioning and deletion tombstones in `userdb`. Enforce JWT, live permissions, ownership and tenant policy; expose protected internal profile export/erasure APIs. |
+| `mail-service` | Own SMTP credentials, sender address, eleven HTML/text templates, required variables, managed `MAIL_SIGNATURE`, template preview, durable idempotency receipts and SMTP submission. Internal requests require `MAIL_SERVICE_API_KEY`. |
+| PostgreSQL | Persist users, BCrypt password/OTP hashes, verification state, credential revisions, cooldowns and SHA-256 hashes of reset/email-change proofs. Auth runs Flyway V1-V7; User runs V1-V2 and Mail runs V1 in their independent databases. |
 | Redis | Cache hashed refresh records and generations; enforce shared IP counters and temporary login locks. SQL is authoritative for session revocation and replay history. Refresh families have a seven-day absolute expiry; Lua scripts serialize security-state changes across Auth instances. |
 | Key manifest and audit files | Supply reloadable signing/verification keys and local rolling security event storage. Audit payloads exclude passwords, OTPs, tokens, emails and private keys; critical mutations also write SQL audit records, while the collector merges service events and exposes metrics/alerts. |
 
@@ -114,6 +135,9 @@ Lifecycle proofs remain random, single-use opaque values with a 15-minute TTL an
 6. **Sessions and devices:** `GET /api/v1/auth/sessions` lists owned active families; DELETE revokes a specific family. Device endpoints group sessions by optional `X-Device-Id` and retain login/refresh observations in Auth SQL. Revoked sessions fail live identity checks, including for previously issued JWTs.
 7. **Profiles and RBAC:** User owns `GET/PATCH /api/v1/users/me`; identity fields cannot be edited there. Auth owns role/permission definitions and administrator role-assignment endpoints. Current permissions are enforced at service boundaries and administrative controllers.
 8. **Deactivate:** `/deactivate` requires the current password, disables the identity, invalidates lifecycle proofs and revokes sessions. The account's retained User profile is inaccessible through protected APIs afterward.
+9. **Administrative status and tenant access:** `/users` supports pagination/filter/sort; `PATCH /users/{id}/status` enables, disables or suspends an account and invalidates credentials. Role grants and tenant membership govern access to another user's profile.
+10. **Machine access and device security:** named API keys exchange for scoped short-lived JWTs. Auth checks live key/account generations, tracks authentication history and sends a notice on first device observation; trusted-device preferences never skip authentication.
+11. **Export and erasure:** `/reauthenticate` verifies the password and issues a session-bound five-minute proof for `GET /api/v1/users/me/export`. `DELETE /api/v1/users/me` requires the password, revokes access immediately and starts a durable job that erases User profile data before scrubbing Auth data.
 
 Short Auth paths in this list are relative to `/api/v1/auth`. JWT cryptographic expiry remains 15 minutes, but P2 live state checks reject revoked/deactivated/stale-credential tokens on subsequent requests. Requests already authorized in flight are not canceled across services. See [P2 operations](docs/SESSION_IDENTITY_P2.md). Operational details: [P0 security](docs/SECURITY_P0.md), [P1 lifecycle](docs/ACCOUNT_LIFECYCLE_P1.md), and [Mail service](docs/MAIL_SERVICE.md).
 
@@ -122,12 +146,11 @@ Short Auth paths in this list are relative to `/api/v1/auth`. JWT cryptographic 
 Arrows below mean “depends on.” These modules are libraries packaged with the services, not separate running services.
 
 ```mermaid
+%%{init: {"flowchart": {"rankSpacing": 180}}}%%
 flowchart TB
-    auth["auth-service"] --> servlet["api-servlet<br/>MVC responses, strict JSON/validation configuration<br/>Exception/security handlers and request tracing"]
-    user["user-service"] --> servlet
-    mail["mail-service"] --> servlet
-    gateway["api-gateway"] --> reactive["api-reactive<br/>WebFlux responses and exception/security handlers<br/>Request tracing"]
-    servlet --> common["api-common<br/>ApiPaths, envelope, codes, validation and exceptions<br/>Trace/log helpers, SecurityAudit and ClientIdentity"]
+    mvc["Auth / User / Mail"] --> servlet["api-servlet<br/>MVC / JSON validation<br/>Errors and request tracing"]
+    gateway["API Gateway"] --> reactive["api-reactive<br/>WebFlux / security errors<br/>Request tracing"]
+    servlet --> common["api-common<br/>API contracts and validation<br/>Tracing, audit and identity"]
     reactive --> common
 ```
 

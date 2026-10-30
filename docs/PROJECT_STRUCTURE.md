@@ -5,8 +5,11 @@ Each module keeps its source under `src/main/java` and tests under `src/test/jav
 ```text
 auth-service / dev.kaidev.auth
 ├── AuthApplication.java
+├── access/             Admin accounts, API keys, tenant policy, reauthentication, export/erasure
 ├── identity/           Roles/permissions, sessions/devices, state checks and deactivation
 ├── client/             Internal HTTP client for Mail
+├── outbox/             Encrypted mail/recovery jobs and retry workers
+├── hardening/          Durable session ledger, last-admin guard, SQL audit and retention
 ├── config/             Spring and security configuration
 ├── constant/           Auth status codes and public messages
 ├── controller/         HTTP endpoints
@@ -32,7 +35,7 @@ user-service / dev.kaidev.user
 ├── entity/             User-owned profile entity
 ├── repository/         Profile database access
 ├── service/            Profile read/partial update/versioning
-├── security/           Auth identity-check client/filter
+├── security/           Auth identity/policy client, JWT filter and internal API-key security
 ├── config/             JWT/security configuration
 ├── controller/         Profile endpoints
 └── dto/response/       Profile response payloads
@@ -81,6 +84,6 @@ Auth Lua scripts live in `auth-service/src/main/resources/redis/`. `scripts/jwt-
 
 P1 lifecycle tokens use `AccountActionToken`, `AccountActionTokenRepository`, and the `V3__account_lifecycle.sql` migration. `outbox/` supplies encrypted durable recovery/mail jobs and leased retry workers; account notifications are enqueued before SQL commit. See [Account lifecycle](ACCOUNT_LIFECYCLE_P1.md).
 
-P2 keeps Auth V1–V5 migrations in `auth-service`, and independent profile V1 in `user-service`. `infra/postgres/init-user-db.sql` provisions the local User database; `scripts/grant-admin.sh` is an explicit operator bootstrap. See [Session and identity management](SESSION_IDENTITY_P2.md).
+Auth keeps V1–V7 migrations in `auth-service`; User keeps independent profile V1–V2 migrations in `user-service`. V6 adds account access state, V7 adds reauthentication proofs and User V2 adds deletion tombstones. `infra/postgres/init-user-db.sql` provisions the local User database; `scripts/grant-admin.sh` is an explicit operator bootstrap. See [Session and identity management](SESSION_IDENTITY_P2.md).
 
 `hardening/` contains SQL session/replay ledgers, the last-administrator guard, transactional audit storage and retention. Mail owns its V1 delivery receipts in `maildb`; scoped Flyway callbacks grant each runtime role only service table access. `scripts/audit-collector.py` merges audit files; `scripts/verification/` contains isolated failure/load/SMTP drills. See [six reliability fixes](HARDENING_RELIABILITY.md).
