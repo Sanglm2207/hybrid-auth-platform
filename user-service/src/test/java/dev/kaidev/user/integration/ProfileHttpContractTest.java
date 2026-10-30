@@ -85,4 +85,16 @@ class ProfileHttpContractTest {
         mvc.perform(get("/api/v1/users/missing").header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
+    @Test void profileResponseConformsToOpenApi() throws Exception {
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isOk())
+                .andExpect(com.atlassian.oai.validator.mockmvc.SwaggerValidatorMatchers.swagger().isValid("../docs/openapi.json"));
+    }
+    @Test void springSecurityTestCannotBypassLivePermissions() throws Exception {
+        when(identities.check(any(), anyString())).thenReturn(new IdentityAccess(true, Set.of("USER"), Set.of()));
+        mvc.perform(patch("/api/v1/users/me").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
+                    .jwt(j -> j.subject(USER).claim("sid", UUID.randomUUID().toString()).claim("cv",0L).claim("sv",0L)))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"denied\"}"))
+                .andExpect(status().isForbidden());
+    }
 }

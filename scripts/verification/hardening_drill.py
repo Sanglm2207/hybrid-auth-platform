@@ -172,6 +172,9 @@ try:
   # Guard is enforced on PostgreSQL, beyond the H2 unit/integration checks.
   adminId=call(gateway,'/api/v1/users/me',token=admin['accessToken'],method='GET')['data']['id']
   call(gateway,base+'/users/'+adminId+'/roles',{'roles':['USER'],'currentPassword':pw},admin['accessToken'],method='PUT',expected=409)
+  if os.environ.get('P4_ZAP') == 'true':
+   from zap_api_scan import scan
+   scan(user,current['accessToken'])
   call(gateway,base+'/deactivate',{'currentPassword':pw},current['accessToken'])
   call(gateway,'/api/v1/users/me',token=current['accessToken'],method='GET',expected=401)
   call(user,'/api/v1/users/me',token=current['accessToken'],method='GET',expected=401)

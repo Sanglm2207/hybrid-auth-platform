@@ -1,0 +1,17 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>dev.kaidev</groupId><artifactId>hybrid-auth-platform</artifactId><version>1.0.0</version></parent>
+  <artifactId>coverage-report</artifactId>
+  <dependencies>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>api-common</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>api-servlet</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>api-reactive</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>auth-service</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>user-service</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>mail-service</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>dev.kaidev</groupId><artifactId>api-gateway</artifactId><version>${project.version}</version></dependency>
+  </dependencies>
+  <build><plugins><plugin><groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId>
+    <executions><execution><id>aggregate</id><phase>verify</phase><goals><goal>report-aggregate</goal></goals></execution></executions>
+  </plugin></plugins></build>
+</project>

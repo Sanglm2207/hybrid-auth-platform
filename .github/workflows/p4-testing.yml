@@ -1,0 +1,92 @@
+name: P4 tests and security
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 19 * * 0'
+permissions:
+  contents: read
+concurrency:
+  group: p4-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit, contract, security and Testcontainers integration tests
+        run: |
+          mvn -B clean verify
+          python3 scripts/verification/check_coverage.py
+      - name: Browser account action tests
+        run: node --test auth-service/src/test/js/*.test.cjs
+      - name: Audit collector tests
+        run: python3 -m unittest discover -s scripts/verification -p 'test_*.py'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-and-coverage-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+            **/target/site/jacoco/
+            coverage-report/target/site/jacoco-aggregate/
+  dependency-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Resolve actual Maven dependency graph
+        run: mvn -B -DskipTests package
+      - uses: aquasecurity/setup-trivy@e07451d2e059ed86c2870430ea286b3a9e0bf241
+        with:
+          cache: true
+      - name: Generate SBOM from packaged application jars
+        run: |
+          mkdir -p target-security-artifacts
+          for module in auth-service user-service mail-service api-gateway; do
+            cp "$module/target/$module-1.0.0.jar" target-security-artifacts/
+          done
+          trivy fs --scanners vuln --format cyclonedx --output p4-sbom.json target-security-artifacts
+      - name: Fail on HIGH and CRITICAL dependency vulnerabilities
+        run: trivy sbom --severity HIGH,CRITICAL --exit-code 1 --format json --output p4-dependency-report.json p4-sbom.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-security-reports
+          path: p4-*.json
+  isolated-dast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - run: mvn -B -DskipTests package
+      - name: Real service security drill and authenticated ZAP API scan
+        env:
+          P4_ZAP: 'true'
+        run: python3 scripts/verification/hardening_drill.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-reports
+          path: reports/zap/

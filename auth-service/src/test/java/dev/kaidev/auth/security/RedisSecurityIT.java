@@ -16,9 +16,12 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /** Uses a disposable real Redis; never touches Compose data or flushes a shared database. */
+@org.testcontainers.junit.jupiter.Testcontainers
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class RedisSecurityIntegrationTest {
-    private String container;
+class RedisSecurityIT {
+    @org.testcontainers.junit.jupiter.Container
+    static final org.testcontainers.containers.GenericContainer<?> REDIS =
+            new org.testcontainers.containers.GenericContainer<>("redis:7.4-alpine").withExposedPorts(6379);
     private LettuceConnectionFactory factory;
     private StringRedisTemplate redis;
     private SecurityState state;
@@ -28,30 +31,12 @@ class RedisSecurityIntegrationTest {
     private final JwtEncoder encoder = parameters -> Jwt.withTokenValue("test-access")
             .header("alg", "RS256").claims(c -> c.putAll(parameters.getClaims().getClaims())).build();
 
-    private static String docker(String... args) throws Exception {
-        var command = new ArrayList<String>(); command.add("docker"); command.addAll(List.of(args));
-        var process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly(); throw new IllegalStateException("Docker timed out"); }
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
-        if (process.exitValue() != 0) throw new IllegalStateException("Docker is required for Redis security integration tests: " + output);
-        return output;
-    }
-
-    @BeforeAll void startRedis() throws Exception {
-        container = docker("run", "--rm", "-d", "-p", "127.0.0.1::6379", "redis:7.4-alpine");
-        int port = Integer.parseInt(docker("port", container, "6379/tcp").split(":")[1]);
-        factory = new LettuceConnectionFactory("127.0.0.1", port); factory.afterPropertiesSet();
+    @BeforeAll void startRedis() {
+        factory = new LettuceConnectionFactory(REDIS.getHost(), REDIS.getMappedPort(6379));
+        factory.afterPropertiesSet();
         redis = new StringRedisTemplate(factory); redis.afterPropertiesSet();
-        for (int i = 0; i < 100; i++) {
-            try (var connection = factory.getConnection()) { if ("PONG".equals(connection.ping())) return; }
-            catch (Exception ignored) { Thread.sleep(50); }
-        }
-        throw new IllegalStateException("Isolated Redis did not start");
     }
-    @AfterAll void stopRedis() throws Exception {
-        if (factory != null) factory.destroy();
-        if (container != null) docker("rm", "-f", container);
-    }
+    @AfterAll void stopRedis() { if (factory != null) factory.destroy(); }
     @BeforeEach void setup() {
         state = new SecurityState(redis, "security:{test-" + UUID.randomUUID() + "}:");
         first = new SessionService(state, encoder, "http://issuer.test", 60);

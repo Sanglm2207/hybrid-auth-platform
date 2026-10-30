@@ -7,3 +7,8 @@ logs/
 
 __pycache__/
 *.pyc
+
+reports/
+p4-sbom.json
+p4-dependency-report.json
+target-security-artifacts/

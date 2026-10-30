@@ -189,4 +189,16 @@ class AuthHttpContractTest {
         mvc.perform(get("/.well-known/jwks.json")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.keys").isArray()).andExpect(jsonPath("$.success").doesNotExist());
     }
+    @Test void refreshResponseConformsToOpenApi() throws Exception {
+        when(sessions.rotate(anyString(), any())).thenReturn(new TokenResponse("signed-access", "a".repeat(43), "Bearer", 900));
+        mvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(Map.of("refreshToken", "b".repeat(43)))))
+                .andExpect(status().isOk())
+                .andExpect(com.atlassian.oai.validator.mockmvc.SwaggerValidatorMatchers.swagger().isValid("../docs/openapi.json"));
+    }
+    @Test void unauthorizedResponseConformsToOpenApi() throws Exception {
+        mvc.perform(post("/api/v1/auth/logout-all").header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(com.atlassian.oai.validator.mockmvc.SwaggerValidatorMatchers.swagger().isValid("../docs/openapi.json"));
+    }
 }
